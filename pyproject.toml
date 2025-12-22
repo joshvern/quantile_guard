@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quantile-regression-pdlp"
-version = "0.1.0"
+version = "0.1.1"
 description = "Quantile regression via linear programming using Google OR-Tools PDLP, with a scikit-learn compatible API and statistical summaries."
 readme = "README.md"
 license = { text = "MIT" }
@@ -33,6 +33,7 @@ dependencies = [
 [project.urls]
 Repository = "https://github.com/joshvern/quantile_regression_pdlp"
 Issues = "https://github.com/joshvern/quantile_regression_pdlp/issues"
+Documentation = "https://joshvern.github.io/quantile_regression_pdlp/"
 
 [project.optional-dependencies]
 test = [

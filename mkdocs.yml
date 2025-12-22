@@ -1,0 +1,26 @@
+site_name: quantile-regression-pdlp
+site_description: Optimization-based quantile regression using Google OR-Tools PDLP.
+site_url: https://joshvern.github.io/quantile_regression_pdlp/
+repo_url: https://github.com/joshvern/quantile_regression_pdlp
+repo_name: joshvern/quantile_regression_pdlp
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Usage: usage.md
+  - API: api.md
+  - Theory: theory.md
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
