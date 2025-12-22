@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantile-regression-pdlp"
+version = "0.1.0"
+description = "Quantile regression via linear programming using Google OR-Tools PDLP, with a scikit-learn compatible API and statistical summaries."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Joshua Vernazza" }]
+requires-python = ">=3.9"
+keywords = ["quantile-regression", "linear-programming", "optimization", "pdlp", "ortools", "statistics", "machine-learning"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "ortools>=9.0.9047",
+  "numpy>=1.18.0",
+  "pandas>=1.0.0",
+  "scipy>=1.4.0",
+  "tqdm>=4.50.0",
+  "joblib>=1.0.0",
+  "scikit-learn>=0.22.0",
+]
+
+[project.urls]
+Repository = "https://github.com/joshvern/quantile_regression_pdlp"
+Issues = "https://github.com/joshvern/quantile_regression_pdlp/issues"
+
+[project.optional-dependencies]
+test = [
+  "pytest>=7",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]

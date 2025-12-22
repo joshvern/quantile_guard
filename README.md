@@ -1,3 +1,6 @@
+**TL;DR**: `quantile-regression-pdlp` is an optimization-based quantile regression implementation built on Google OR-Tools' PDLP solver.
+It provides a familiar `scikit-learn`-style API and optional statistical summaries via bootstrapping.
+
 ## Quantile Regression PDLP
 
 A Python package for performing quantile regression using the PDLP solver from Google's OR-Tools, with an interface and summaries similar to `statsmodels`, and fully compatible with `scikit-learn` and `pandas`.
@@ -21,17 +24,26 @@ A Python package for performing quantile regression using the PDLP solver from G
 
 ## Installation
 ### Prerequisites
-- Python 3.6 or higher.
+- Python 3.9 or higher.
 - `ortools` package.
+
+### Install from PyPI
+```bash
+pip install quantile-regression-pdlp
+```
 
 ### Install from Source
 Clone the repository:
 ```bash
 git clone https://github.com/joshvern/quantile_regression_pdlp.git
 cd quantile_regression_pdlp
-pip install -U pip setuptools wheel
+pip install -U pip
 pip install .
 ```
+
+## Why PDLP?
+- Quantile regression can be written as a linear program (LP) by introducing slack variables for positive/negative residuals.
+- OR-Tools' PDLP is a first-order method aimed at solving large LPs efficiently compared to many traditional simplex/interior-point approaches.
 
 ## Usage
 ```python
