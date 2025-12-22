@@ -74,7 +74,7 @@ print('Predictions:', y_pred)
 
 ## Quantile Regression as a Linear Programming Problem
 
-Quantile regression aims to estimate the conditional quantiles of a response variable given certain predictor variables. Unlike ordinary least squares regression, which minimizes the sum of squared residuals, quantile regression minimizes a weighted sum of absolute residuals and can incorporate regularization. Estimating multiple quantiles simultaneously allows for a more comprehensive understanding of the conditional distribution and ensures quantile estimates do not cross.
+Quantile regression aims to estimate the conditional quantiles of a response variable given certain predictor variables. Unlike ordinary least squares regression, which minimizes the sum of squared residuals, quantile regression minimizes a weighted sum of absolute residuals and can incorporate regularization. Estimating multiple quantiles simultaneously allows for a more comprehensive understanding of the conditional distribution and can enforce non-crossing constraints on the training data.
 
 ### Mathematical Formulation
 
@@ -87,7 +87,7 @@ $$
 where:
 - $y_i^{(m)}$ is the response variable for the $m^{th}$ output.
 - $x_i$ is the vector of predictor variables.
-- $w_i$ is the weight assigned to the #th observation.
+- $w_i$ is the weight assigned to the $i$-th observation.
 - $\beta^{(k, m)}$ is the vector of coefficients for quantile $\tau_k$ and output $m$.
 - $\rho_{\tau_k}(u)$ is the quantile loss function defined as:
 
@@ -170,11 +170,11 @@ This LP formulation can be efficiently solved using the PDLP solver provided by 
 ## Features
 - **Sklearn and Pandas Compliant**: Seamlessly integrates with `scikit-learn` pipelines and accepts `pandas DataFrame` inputs.
 - **Custom Quantiles**: Supports estimation for any quantile $\tau \in (0, 1)$.
-- **Multiple Quantiles**: Estimates multiple quantiles simultaneously without crossing.
+- **Multiple Quantiles**: Estimates multiple quantiles simultaneously with non-crossing constraints enforced on the training data.
 - **Multi-Output Regression**: Supports regression tasks with multiple target variables, training them jointly.
 - **Weighted Quantile Regression**: Assigns different weights to observations, allowing differential influence on regression estimates.
 - **L1 Regularization (Lasso)**: Promotes sparsity in the model by penalizing the absolute values of the coefficients.
-- **Statistical Summaries**: Provides standard errors, t-values, and p-values computed via bootstrapping.
+- **Statistical Summaries**: Provides bootstrap standard errors; reported t-values and p-values use a t reference distribution (approximate).
 - **Bootstrap Estimation**: Standard errors are estimated using bootstrap resampling.
 - **Parallel Bootstrapping**: Utilizes multiple CPU cores for bootstrapping to speed up computations.
 - **Progress Indicators**: Displays progress bars during bootstrapping to inform users of training progress.
