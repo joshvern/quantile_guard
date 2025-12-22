@@ -1,3 +1,17 @@
+[![PyPI][pypi-badge]][pypi-link]
+[![Python Versions][py-badge]][pypi-link]
+[![CI][ci-badge]][ci-link]
+[![Docs][docs-badge]][docs-link]
+
+[pypi-badge]: https://img.shields.io/pypi/v/quantile-regression-pdlp.svg
+[py-badge]: https://img.shields.io/pypi/pyversions/quantile-regression-pdlp.svg
+[ci-badge]: https://github.com/joshvern/quantile_regression_pdlp/actions/workflows/ci.yml/badge.svg
+[docs-badge]: https://github.com/joshvern/quantile_regression_pdlp/actions/workflows/docs.yml/badge.svg
+
+[pypi-link]: https://pypi.org/project/quantile-regression-pdlp/
+[ci-link]: https://github.com/joshvern/quantile_regression_pdlp/actions/workflows/ci.yml
+[docs-link]: https://joshvern.github.io/quantile_regression_pdlp/
+
 **TL;DR**: `quantile-regression-pdlp` is an optimization-based quantile regression implementation built on Google OR-Tools' PDLP solver.
 It provides a familiar `scikit-learn`-style API and optional statistical summaries via bootstrapping.
 
@@ -39,6 +53,14 @@ git clone https://github.com/joshvern/quantile_regression_pdlp.git
 cd quantile_regression_pdlp
 pip install -U pip
 pip install .
+```
+
+## Documentation
+Docs site: https://joshvern.github.io/quantile_regression_pdlp/
+
+### Quick sanity check
+```bash
+python -c "from quantile_regression_pdlp import QuantileRegression; print(QuantileRegression)"
 ```
 
 ## Why PDLP?
