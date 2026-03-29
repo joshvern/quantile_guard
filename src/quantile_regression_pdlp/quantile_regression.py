@@ -3,128 +3,229 @@
 from ortools.linear_solver import pywraplp
 import numpy as np
 import pandas as pd
-from scipy.stats import t
+from scipy.stats import norm, t
+from scipy.optimize import linprog
+from scipy import sparse
 from tqdm import tqdm
 from sklearn.base import BaseEstimator, RegressorMixin
 from joblib import Parallel, delayed
 import multiprocessing
 import threading
+import time
+import warnings
 
 
 class QuantileRegression(BaseEstimator, RegressorMixin):
     """
-    Quantile Regression using PDLP solver from Google's OR-Tools, with statistical summaries and multi-output support.
+    Quantile Regression using LP solvers from Google's OR-Tools, with statistical
+    summaries, multi-output support, and advanced regularization.
 
     Parameters
     ----------
     tau : float or list of floats, default=0.5
         The quantile(s) to estimate, each must be between 0 and 1.
-        Can be a single float for one quantile or a list of floats for multiple quantiles.
 
     n_bootstrap : int, default=1000
-        Number of bootstrap samples to use for estimating standard errors.
+        Number of bootstrap samples for standard error estimation.
+        Only used when ``se_method='bootstrap'``.
 
-    random_state : int, default=None
+    random_state : int or None, default=None
         Seed for the random number generator.
 
     regularization : str, default='none'
-        Type of regularization to apply. Options are 'l1' for Lasso regularization or 'none' for no regularization.
+        Regularization type: 'none', 'l1', 'elasticnet', 'scad', or 'mcp'.
 
     alpha : float, default=0.0
-        Regularization strength. Must be a non-negative float. Higher values imply stronger regularization.
+        Regularization strength. The objective is normalized as
+        ``(1/n) * sum(pinball_loss) + alpha * penalty``, making alpha
+        dataset-size-invariant and consistent with scikit-learn.
+
+    l1_ratio : float, default=1.0
+        Mixing parameter for elastic net (0 = pure L2, 1 = pure L1).
+        Only used when ``regularization='elasticnet'``.
 
     n_jobs : int, default=1
-        The number of jobs to run in parallel for bootstrapping.
-        `-1` means using all processors.
+        Number of parallel jobs for bootstrapping. ``-1`` uses all cores.
+
+    solver_backend : str, default='PDLP'
+        LP solver: 'PDLP' (first-order, large-scale) or 'GLOP' (simplex).
+
+    solver_tol : float or None, default=None
+        Solver optimality tolerance. If None, uses solver default.
+
+    solver_time_limit : float or None, default=None
+        Maximum solver time in seconds.
+
+    enforce_non_crossing_predict : bool, default=True
+        Enforce monotonic quantile predictions via isotonic projection.
+
+    se_method : str, default='bootstrap'
+        Standard error method: 'bootstrap', 'analytical' (IID), or 'kernel'
+        (heteroscedasticity-robust sandwich).
+
+    use_sparse : bool, default=False
+        Use scipy sparse LP solver instead of OR-Tools. More memory-efficient
+        for large datasets.
 
     Attributes
     ----------
     coef_ : dict
-        Estimated coefficients for each quantile and output.
-        Structure: {tau: {output: array of coefficients}}
-
+        Coefficients ``{tau: {output: array}}``.
     intercept_ : dict
-        Estimated intercept term for each quantile and output.
-        Structure: {tau: {output: float}}
-
+        Intercepts ``{tau: {output: float}}``.
     stderr_ : dict
-        Standard errors of the coefficients for each quantile and output.
-        Structure: {tau: {output: array of standard errors}}
-
+        Standard errors ``{tau: {output: array}}``.
     tvalues_ : dict
-        T-statistics of the coefficients for each quantile and output.
-        Structure: {tau: {output: array of t-values}}
-
+        T-statistics ``{tau: {output: array}}``.
     pvalues_ : dict
-        P-values of the coefficients for each quantile and output.
-        Structure: {tau: {output: array of p-values}}
-
+        P-values ``{tau: {output: array}}``.
+    confidence_intervals_ : dict
+        95% bootstrap CIs ``{tau: {output: DataFrame}}``.
+    solver_info_ : dict
+        Solver diagnostics from the most recent fit.
     feature_names_ : list
-        List of feature names. If input X is a pandas DataFrame, the column names are used; otherwise, generic names are assigned.
-
+        Feature names.
     output_names_ : list
-        List of output names. If input y is a pandas DataFrame, the column names are used; otherwise, generic names are assigned.
-
-    Methods
-    -------
-    fit(X, y, weights=None)
-        Fit the quantile regression model.
-
-    predict(X)
-        Predict using the quantile regression model.
-
-    summary()
-        Return a summary of the regression results.
+        Output names.
     """
 
     def __init__(self, tau=0.5, n_bootstrap=1000, random_state=None,
-                 regularization='none', alpha=0.0, n_jobs=1):
+                 regularization='none', alpha=0.0, l1_ratio=1.0,
+                 n_jobs=1, solver_backend='PDLP', solver_tol=None,
+                 solver_time_limit=None, enforce_non_crossing_predict=True,
+                 se_method='bootstrap', use_sparse=False):
         self.tau = tau
         self.n_bootstrap = n_bootstrap
         self.random_state = random_state
         self.regularization = regularization
         self.alpha = alpha
+        self.l1_ratio = l1_ratio
         self.n_jobs = n_jobs
+        self.solver_backend = solver_backend
+        self.solver_tol = solver_tol
+        self.solver_time_limit = solver_time_limit
+        self.enforce_non_crossing_predict = enforce_non_crossing_predict
+        self.se_method = se_method
+        self.use_sparse = use_sparse
 
-        # Attributes initialized during fitting
         self.coef_ = None
         self.intercept_ = None
         self.stderr_ = None
         self.tvalues_ = None
         self.pvalues_ = None
+        self.confidence_intervals_ = None
+        self.solver_info_ = None
         self.feature_names_ = None
         self.output_names_ = None
         self._is_fitted = None
+        self._pinball_loss_ = None
+        self._null_pinball_loss_ = None
+        self._X_aug = None
+        self._y = None
+        self._weights = None
 
-    def fit(self, X, y, weights=None):
+    # ================================================================
+    # Core fitting
+    # ================================================================
+
+    def fit(self, X, y, weights=None, clusters=None):
         """
         Fit the quantile regression model.
 
         Parameters
         ----------
         X : array-like of shape (n_samples, n_features)
-            Training data. Can be a NumPy array or a pandas DataFrame.
-
+            Training data.
         y : array-like of shape (n_samples,) or (n_samples, n_outputs)
-            Target values. Can be a NumPy array, pandas Series, or pandas DataFrame.
-
+            Target values.
         weights : array-like of shape (n_samples,), optional
-            Weights for each observation. Default is None, which assigns equal weight to all observations.
+            Observation weights.
+        clusters : array-like of shape (n_samples,), optional
+            Cluster labels for cluster-robust standard errors.
 
         Returns
         -------
-        self : object
-            Returns self.
+        self
         """
-        # Handle pandas DataFrames and Series for X
+        X, y, weights = self._validate_inputs(X, y, weights)
+        self._validate_tau()
+
+        n_samples, n_features = X.shape
+        X_augmented = np.hstack((np.ones((n_samples, 1)), X))
+
+        self._init_storage(n_features)
+        self._X_aug = X_augmented
+        self._y = y
+        self._weights = weights
+
+        # Estimate coefficients
+        self._fit_coefficients(X_augmented, y, weights)
+
+        # Compute pinball losses for pseudo R²
+        self._compute_pinball_losses(X_augmented, y, weights)
+
+        # Compute standard errors
+        if clusters is not None:
+            self._compute_cluster_se(X_augmented, y, weights, np.asarray(clusters))
+        elif self.se_method == 'bootstrap':
+            self._compute_bootstrap_se(X_augmented, y, weights)
+        elif self.se_method in ('analytical', 'kernel'):
+            self._compute_analytical_se(X_augmented, y, method=self.se_method)
+
+        for q in self.tau:
+            for output in self.output_names_:
+                self._is_fitted[q][output] = True
+
+        return self
+
+    def fit_formula(self, formula, data, weights=None, clusters=None):
+        """
+        Fit using an R-style formula (requires ``patsy``).
+
+        Parameters
+        ----------
+        formula : str
+            R-style formula, e.g. ``"y ~ x1 + x2 + C(group)"``.
+        data : DataFrame
+            Data containing all variables referenced in the formula.
+        weights : str or array-like, optional
+            Column name in data or array of weights.
+        clusters : str or array-like, optional
+            Column name in data or array of cluster labels.
+
+        Returns
+        -------
+        self
+        """
+        try:
+            import patsy
+        except ImportError:
+            raise ImportError(
+                "Formula interface requires 'patsy'. "
+                "Install with: pip install patsy"
+            )
+
+        y_df, X_df = patsy.dmatrices(formula, data, return_type='dataframe')
+
+        # Drop patsy's intercept (we add our own)
+        if 'Intercept' in X_df.columns:
+            X_df = X_df.drop('Intercept', axis=1)
+
+        w = data[weights].values if isinstance(weights, str) else weights
+        c = data[clusters].values if isinstance(clusters, str) else clusters
+
+        self._formula = formula
+        return self.fit(X_df, y_df, weights=w, clusters=c)
+
+    def _validate_inputs(self, X, y, weights):
+        """Validate and convert inputs to numpy arrays."""
         if isinstance(X, pd.DataFrame):
             self.feature_names_ = X.columns.tolist()
             X = X.values
         else:
-            self.feature_names_ = [f'X{i}' for i in range(1, X.shape[1] + 1)]
             X = np.asarray(X)
+            self.feature_names_ = [f'X{i}' for i in range(1, X.shape[1] + 1)]
 
-        # Handle pandas DataFrames, Series, or NumPy arrays for y
         if isinstance(y, pd.DataFrame):
             self.output_names_ = y.columns.tolist()
             y = y.values
@@ -141,342 +242,785 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
             else:
                 raise ValueError("y must be a 1D or 2D array-like structure.")
 
-        n_samples, n_features = X.shape
-        n_outputs = y.shape[1]
-
-        # Handle weights
+        n_samples = X.shape[0]
         if weights is None:
             weights = np.ones(n_samples)
         else:
             weights = np.asarray(weights)
             if weights.shape[0] != n_samples:
-                raise ValueError("Weights array must have the same length as the number of observations.")
+                raise ValueError(
+                    "Weights array must have the same length as the number of observations."
+                )
 
-        # Validate tau
-        self._validate_tau()
+        return X, y, weights
 
-        # Add intercept term by appending a column of ones to X
-        X_augmented = np.hstack((np.ones((n_samples, 1)), X))
+    def _init_storage(self, n_features):
+        """Initialize coefficient and inference storage."""
+        self.coef_ = {q: {o: np.zeros(n_features) for o in self.output_names_} for q in self.tau}
+        self.intercept_ = {q: {o: 0.0 for o in self.output_names_} for q in self.tau}
+        self.stderr_ = {q: {o: np.zeros(n_features + 1) for o in self.output_names_} for q in self.tau}
+        self.tvalues_ = {q: {o: np.zeros(n_features + 1) for o in self.output_names_} for q in self.tau}
+        self.pvalues_ = {q: {o: np.zeros(n_features + 1) for o in self.output_names_} for q in self.tau}
+        self.confidence_intervals_ = {q: {o: None for o in self.output_names_} for q in self.tau}
+        self._is_fitted = {q: {o: False for o in self.output_names_} for q in self.tau}
+        self._pinball_loss_ = {q: {} for q in self.tau}
+        self._null_pinball_loss_ = {q: {} for q in self.tau}
 
-        # Initialize storage for multiple quantiles and outputs
-        self.coef_ = {q: {output: np.zeros(n_features) for output in self.output_names_} for q in self.tau}
-        self.intercept_ = {q: {output: 0.0 for output in self.output_names_} for q in self.tau}
-        self.stderr_ = {q: {output: np.zeros(n_features + 1) for output in self.output_names_} for q in self.tau}
-        self.tvalues_ = {q: {output: np.zeros(n_features + 1) for output in self.output_names_} for q in self.tau}
-        self.pvalues_ = {q: {output: np.zeros(n_features + 1) for output in self.output_names_} for q in self.tau}
-        self._is_fitted = {q: {output: False for output in self.output_names_} for q in self.tau}
+    def _validate_tau(self):
+        """Validate and sort tau."""
+        if isinstance(self.tau, (int, float)):
+            if not 0 < self.tau < 1:
+                raise ValueError("Each quantile tau must be between 0 and 1.")
+            self.tau = [float(self.tau)]
+        elif isinstance(self.tau, list):
+            if not all(isinstance(q, (int, float)) and 0 < q < 1 for q in self.tau):
+                raise ValueError("All quantiles tau must be floats between 0 and 1.")
+            self.tau = sorted([float(q) for q in self.tau])
+        else:
+            raise TypeError("tau must be a float or a list of floats.")
 
-        # Solve LP for all quantiles and outputs simultaneously with non-crossing constraints
-        coefficients = self._solve_multiple_lp(X_augmented, y, weights)
+    def _fit_coefficients(self, X, y, weights):
+        """Estimate regression coefficients (without standard errors)."""
+        if self.regularization in ('scad', 'mcp', 'elasticnet'):
+            coefficients, solver_info = self._solve_with_lla(X, y, weights)
+        else:
+            coefficients, solver_info = self._solve_lp(X, y, weights)
 
-        # Extract the coefficients
+        self.solver_info_ = solver_info
+
         for q in self.tau:
             for idx, output in enumerate(self.output_names_):
                 self.intercept_[q][output] = coefficients[q][idx][0]
                 self.coef_[q][output] = coefficients[q][idx][1:]
 
-        # Compute standard errors via bootstrapping with progress indicators
-        self._compute_standard_errors(X_augmented, y, weights)
-
-        # Mark all quantiles and outputs as fitted
+    def _compute_pinball_losses(self, X, y, weights):
+        """Compute fitted and null pinball losses for pseudo R²."""
+        weight_sum = np.sum(weights)
         for q in self.tau:
-            for output in self.output_names_:
-                self._is_fitted[q][output] = True
+            for ki, output in enumerate(self.output_names_):
+                coef_full = np.concatenate(([self.intercept_[q][output]], self.coef_[q][output]))
+                fitted = X @ coef_full
+                resid = y[:, ki] - fitted
+                loss = np.sum(weights * np.where(resid >= 0, q * resid, (q - 1) * resid)) / weight_sum
+                self._pinball_loss_[q][output] = loss
 
-        return self
+                null_val = np.quantile(y[:, ki], q)
+                null_resid = y[:, ki] - null_val
+                null_loss = np.sum(weights * np.where(null_resid >= 0, q * null_resid, (q - 1) * null_resid)) / weight_sum
+                self._null_pinball_loss_[q][output] = null_loss
 
-    def _validate_tau(self):
-        """
-        Validate the tau parameter to ensure all quantiles are between 0 and 1 and properly sorted.
+    # ================================================================
+    # LP Solvers
+    # ================================================================
 
-        Raises
-        ------
-        ValueError, TypeError
-        """
-        if isinstance(self.tau, float):
-            if not 0 < self.tau < 1:
-                raise ValueError("Each quantile tau must be between 0 and 1.")
-            self.tau = [self.tau]
-        elif isinstance(self.tau, list):
-            if not all(isinstance(q, float) and 0 < q < 1 for q in self.tau):
-                raise ValueError("All quantiles tau must be floats between 0 and 1.")
-            self.tau = sorted(self.tau)  # Sort to enforce ordering
-        else:
-            raise TypeError("tau must be a float or a list of floats.")
+    def _solve_lp(self, X, y, weights, penalty_weights=None, return_coefficients=True):
+        """Dispatch to OR-Tools or scipy solver."""
+        if self.use_sparse:
+            return self._solve_scipy_lp(X, y, weights, penalty_weights, return_coefficients)
+        return self._solve_ortools_lp(X, y, weights, penalty_weights, return_coefficients)
 
-    def _solve_multiple_lp(self, X, y, weights, return_coefficients=True):
-        """
-        Solve multiple quantile regression problems as a single LP with non-crossing constraints.
+    def _create_solver(self):
+        """Create and configure an OR-Tools LP solver."""
+        solver = pywraplp.Solver.CreateSolver(self.solver_backend)
+        if not solver:
+            raise ValueError(
+                f"Solver '{self.solver_backend}' is not available. "
+                f"Try 'PDLP' or 'GLOP'."
+            )
+        if self.solver_time_limit is not None:
+            solver.SetTimeLimit(int(self.solver_time_limit * 1000))
+        if self.solver_tol is not None and self.solver_backend == 'PDLP':
+            try:
+                solver.SetSolverSpecificParametersAsString(
+                    f'termination_criteria {{ eps_optimal_absolute: {self.solver_tol} '
+                    f'eps_optimal_relative: {self.solver_tol} }}'
+                )
+            except Exception:
+                pass
+        return solver
 
-        Parameters
-        ----------
-        X : ndarray of shape (n_samples, n_features + 1)
-            Augmented feature matrix with intercept.
-
-        y : ndarray of shape (n_samples, n_outputs)
-            Target values.
-
-        weights : ndarray of shape (n_samples,)
-            Weights for each observation.
-
-        return_coefficients : bool, default=True
-            Whether to return the estimated coefficients.
-
-        Returns
-        -------
-        coefficients : dict (only if return_coefficients is True)
-            Estimated coefficients for each quantile and output.
-            Structure: {tau: {output: array of coefficients}}
-        """
+    def _solve_ortools_lp(self, X, y, weights, penalty_weights=None, return_coefficients=True):
+        """Solve quantile regression LP using OR-Tools."""
         n_samples, n_features_plus_1 = X.shape
         n_outputs = y.shape[1]
-        n_quantiles = len(self.tau)
+        weight_sum = np.sum(weights)
 
-        # Create the solver instance
-        solver = pywraplp.Solver.CreateSolver('PDLP')
-        if not solver:
-            raise Exception("PDLP solver is not available.")
-
+        solver = self._create_solver()
         infinity = solver.infinity()
 
-        # Define variables for each quantile and output
-        # Structure: beta[q][k][j], r_pos[q][k][i], r_neg[q][k][i]
-        beta = {q: {k: [solver.NumVar(-infinity, infinity, f'beta_{j}_q{q}_k{k}') 
-                       for j in range(n_features_plus_1)] for k in range(n_outputs)} 
+        has_penalty = (penalty_weights is not None) or (self.regularization == 'l1' and self.alpha > 0)
+
+        beta = {q: {k: [solver.NumVar(-infinity, infinity, f'b_{j}_q{q}_k{k}')
+                       for j in range(n_features_plus_1)] for k in range(n_outputs)}
                 for q in self.tau}
-        r_pos = {q: {k: [solver.NumVar(0, infinity, f'r_pos_{i}_q{q}_k{k}') 
-                         for i in range(n_samples)] for k in range(n_outputs)} 
+        r_pos = {q: {k: [solver.NumVar(0, infinity, f'rp_{i}_q{q}_k{k}')
+                         for i in range(n_samples)] for k in range(n_outputs)}
                   for q in self.tau}
-        r_neg = {q: {k: [solver.NumVar(0, infinity, f'r_neg_{i}_q{q}_k{k}') 
-                         for i in range(n_samples)] for k in range(n_outputs)} 
+        r_neg = {q: {k: [solver.NumVar(0, infinity, f'rn_{i}_q{q}_k{k}')
+                         for i in range(n_samples)] for k in range(n_outputs)}
                   for q in self.tau}
 
-        # If L1 regularization is specified, introduce auxiliary variables for each quantile, output, and feature
-        if self.regularization == 'l1' and self.alpha > 0:
-            z = {q: {k: [solver.NumVar(0, infinity, f'z_{j}_q{q}_k{k}') 
-                        for j in range(1, n_features_plus_1)] for k in range(n_outputs)} 
+        if has_penalty:
+            z = {q: {k: [solver.NumVar(0, infinity, f'z_{j}_q{q}_k{k}')
+                        for j in range(n_features_plus_1 - 1)] for k in range(n_outputs)}
                  for q in self.tau}
             for q in self.tau:
                 for k in range(n_outputs):
                     for j in range(1, n_features_plus_1):
-                        # z_j_q_k >= beta_j_q_k
                         solver.Add(beta[q][k][j] <= z[q][k][j - 1])
-                        # z_j_q_k >= -beta_j_q_k
                         solver.Add(-beta[q][k][j] <= z[q][k][j - 1])
 
-        # Add constraints and objective
         objective = solver.Objective()
         for q in self.tau:
             for k in range(n_outputs):
                 for i in range(n_samples):
-                    # Residual constraints: y_i_k = x_i^T beta_q_k + r_pos_q_k_i - r_neg_q_k_i
                     constraint_expr = (
-                        sum(X[i, j] * beta[q][k][j] for j in range(n_features_plus_1)) + 
-                        r_pos[q][k][i] - 
-                        r_neg[q][k][i]
+                        sum(X[i, j] * beta[q][k][j] for j in range(n_features_plus_1)) +
+                        r_pos[q][k][i] - r_neg[q][k][i]
                     )
                     solver.Add(constraint_expr == y[i, k])
+                    objective.SetCoefficient(r_pos[q][k][i], q * weights[i] / weight_sum)
+                    objective.SetCoefficient(r_neg[q][k][i], (1 - q) * weights[i] / weight_sum)
 
-                    # Objective coefficients
-                    objective.SetCoefficient(r_pos[q][k][i], self.tau[self.tau.index(q)] * weights[i])
-                    objective.SetCoefficient(r_neg[q][k][i], (1 - self.tau[self.tau.index(q)]) * weights[i])
-
-        # Add L1 regularization to the objective if specified
-        if self.regularization == 'l1' and self.alpha > 0:
+        if has_penalty:
             for q in self.tau:
                 for k in range(n_outputs):
                     for j in range(n_features_plus_1 - 1):
-                        objective.SetCoefficient(z[q][k][j], self.alpha)
+                        if penalty_weights is not None:
+                            w = penalty_weights[q][k][j]
+                        else:
+                            w = self.alpha
+                        objective.SetCoefficient(z[q][k][j], w)
 
         objective.SetMinimization()
 
-        # Add non-crossing constraints per output
+        # Non-crossing constraints
         for k in range(n_outputs):
             for i in range(n_samples):
                 for q_idx in range(len(self.tau) - 1):
-                    q_lower = self.tau[q_idx]
-                    q_upper = self.tau[q_idx + 1]
-                    # Predicted values for quantile q_lower <= predicted values for quantile q_upper
-                    pred_lower = sum(X[i, j] * beta[q_lower][k][j] for j in range(n_features_plus_1))
-                    pred_upper = sum(X[i, j] * beta[q_upper][k][j] for j in range(n_features_plus_1))
-                    solver.Add(pred_lower <= pred_upper)
+                    q_lo = self.tau[q_idx]
+                    q_hi = self.tau[q_idx + 1]
+                    pred_lo = sum(X[i, j] * beta[q_lo][k][j] for j in range(n_features_plus_1))
+                    pred_hi = sum(X[i, j] * beta[q_hi][k][j] for j in range(n_features_plus_1))
+                    solver.Add(pred_lo <= pred_hi)
 
-        # Solve the LP problem
+        wall_start = time.perf_counter()
         status = solver.Solve()
+        wall_time = time.perf_counter() - wall_start
+
+        status_map = {
+            pywraplp.Solver.OPTIMAL: 'OPTIMAL',
+            pywraplp.Solver.FEASIBLE: 'FEASIBLE',
+            pywraplp.Solver.INFEASIBLE: 'INFEASIBLE',
+            pywraplp.Solver.UNBOUNDED: 'UNBOUNDED',
+            pywraplp.Solver.ABNORMAL: 'ABNORMAL',
+            pywraplp.Solver.NOT_SOLVED: 'NOT_SOLVED',
+        }
+        solver_info = {
+            'status': status_map.get(status, f'UNKNOWN({status})'),
+            'wall_time_seconds': round(wall_time, 4),
+            'num_variables': solver.NumVariables(),
+            'num_constraints': solver.NumConstraints(),
+            'objective_value': solver.Objective().Value() if status == pywraplp.Solver.OPTIMAL else None,
+        }
 
         if status != pywraplp.Solver.OPTIMAL:
-            raise Exception('Solver did not find an optimal solution.')
+            raise RuntimeError(
+                f"Solver did not find an optimal solution. "
+                f"Status: {solver_info['status']}. "
+                f"Try adjusting solver_tol, solver_time_limit, or solver_backend."
+            )
 
         if return_coefficients:
-            # Extract the coefficients
             coefficients = {}
             for q in self.tau:
                 coefficients[q] = {}
                 for k in range(n_outputs):
-                    intercept = beta[q][k][0].solution_value()
-                    coef = np.array([beta[q][k][j].solution_value() for j in range(1, n_features_plus_1)])
-                    coefficients[q][k] = np.concatenate(([intercept], coef))
-            return coefficients
+                    vals = np.array([beta[q][k][j].solution_value() for j in range(n_features_plus_1)])
+                    coefficients[q][k] = vals
+            return coefficients, solver_info
+        return None, solver_info
 
-    def _compute_standard_errors(self, X, y, weights):
-        """
-        Compute standard errors via bootstrapping using parallel processing with progress indicators.
+    def _solve_scipy_lp(self, X, y, weights, penalty_weights=None, return_coefficients=True):
+        """Solve quantile regression LP using scipy sparse matrices + HiGHS."""
+        n, p = X.shape
+        K = y.shape[1]
+        Q = len(self.tau)
+        weight_sum = np.sum(weights)
 
-        Parameters
-        ----------
-        X : ndarray of shape (n_samples, n_features + 1)
-            Augmented feature matrix with intercept.
+        has_penalty = (penalty_weights is not None) or (self.regularization == 'l1' and self.alpha > 0)
 
-        y : ndarray of shape (n_samples, n_outputs)
-            Target values.
+        n_beta = Q * K * p
+        n_rpos = Q * K * n
+        n_rneg = Q * K * n
+        n_z = Q * K * (p - 1) if has_penalty else 0
+        n_vars = n_beta + n_rpos + n_rneg + n_z
 
-        weights : ndarray of shape (n_samples,)
-            Weights for each observation.
-        """
+        # ---- Objective ----
+        c = np.zeros(n_vars)
+        for qi, q in enumerate(self.tau):
+            for ki in range(K):
+                base_rp = n_beta + (qi * K + ki) * n
+                base_rn = n_beta + n_rpos + (qi * K + ki) * n
+                c[base_rp:base_rp + n] = q * weights / weight_sum
+                c[base_rn:base_rn + n] = (1 - q) * weights / weight_sum
+
+        if has_penalty:
+            for qi, q in enumerate(self.tau):
+                for ki in range(K):
+                    base_z = n_beta + n_rpos + n_rneg + (qi * K + ki) * (p - 1)
+                    for j in range(p - 1):
+                        if penalty_weights is not None:
+                            c[base_z + j] = penalty_weights[q][ki][j]
+                        else:
+                            c[base_z + j] = self.alpha
+
+        # ---- Equality constraints: X @ beta + r_pos - r_neg = y ----
+        n_eq = Q * K * n
+        eq_rows, eq_cols, eq_data = [], [], []
+
+        for qi, q in enumerate(self.tau):
+            for ki in range(K):
+                row_offset = (qi * K + ki) * n
+                beta_offset = (qi * K + ki) * p
+                rp_offset = n_beta + (qi * K + ki) * n
+                rn_offset = n_beta + n_rpos + (qi * K + ki) * n
+
+                rows_block = np.arange(n) + row_offset
+
+                # X @ beta
+                for j in range(p):
+                    eq_rows.append(rows_block)
+                    eq_cols.append(np.full(n, beta_offset + j))
+                    eq_data.append(X[:, j])
+
+                # +r_pos
+                eq_rows.append(rows_block)
+                eq_cols.append(np.arange(rp_offset, rp_offset + n))
+                eq_data.append(np.ones(n))
+
+                # -r_neg
+                eq_rows.append(rows_block)
+                eq_cols.append(np.arange(rn_offset, rn_offset + n))
+                eq_data.append(-np.ones(n))
+
+        eq_rows = np.concatenate(eq_rows)
+        eq_cols = np.concatenate(eq_cols)
+        eq_data = np.concatenate(eq_data)
+        A_eq = sparse.csc_matrix((eq_data, (eq_rows, eq_cols)), shape=(n_eq, n_vars))
+        b_eq = np.concatenate([y[:, ki] for qi in range(Q) for ki in range(K)])
+
+        # ---- Inequality constraints ----
+        ub_rows, ub_cols, ub_data, b_ub_parts = [], [], [], []
+        ub_row = 0
+
+        # L1: beta_j <= z_j and -beta_j <= z_j
+        if has_penalty:
+            for qi, q in enumerate(self.tau):
+                for ki in range(K):
+                    beta_off = (qi * K + ki) * p
+                    z_off = n_beta + n_rpos + n_rneg + (qi * K + ki) * (p - 1)
+                    for j in range(p - 1):
+                        # beta_{j+1} - z_j <= 0
+                        ub_rows.extend([ub_row, ub_row])
+                        ub_cols.extend([beta_off + j + 1, z_off + j])
+                        ub_data.extend([1.0, -1.0])
+                        b_ub_parts.append(0.0)
+                        ub_row += 1
+                        # -beta_{j+1} - z_j <= 0
+                        ub_rows.extend([ub_row, ub_row])
+                        ub_cols.extend([beta_off + j + 1, z_off + j])
+                        ub_data.extend([-1.0, -1.0])
+                        b_ub_parts.append(0.0)
+                        ub_row += 1
+
+        # Non-crossing
+        for ki in range(K):
+            for qi in range(Q - 1):
+                beta_lo_off = (qi * K + ki) * p
+                beta_hi_off = ((qi + 1) * K + ki) * p
+                for i in range(n):
+                    for j in range(p):
+                        if X[i, j] != 0:
+                            ub_rows.extend([ub_row, ub_row])
+                            ub_cols.extend([beta_lo_off + j, beta_hi_off + j])
+                            ub_data.extend([X[i, j], -X[i, j]])
+                    b_ub_parts.append(0.0)
+                    ub_row += 1
+
+        if ub_row > 0:
+            A_ub = sparse.csc_matrix(
+                (np.array(ub_data), (np.array(ub_rows), np.array(ub_cols))),
+                shape=(ub_row, n_vars)
+            )
+            b_ub = np.array(b_ub_parts)
+        else:
+            A_ub, b_ub = None, None
+
+        # Bounds
+        bounds = [(None, None)] * n_beta + [(0, None)] * (n_rpos + n_rneg + n_z)
+
+        wall_start = time.perf_counter()
+        try:
+            result = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq,
+                             bounds=bounds, method='highs')
+        except Exception:
+            result = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq,
+                             bounds=bounds, method='interior-point')
+        wall_time = time.perf_counter() - wall_start
+
+        solver_info = {
+            'status': 'OPTIMAL' if result.success else result.message,
+            'wall_time_seconds': round(wall_time, 4),
+            'num_variables': n_vars,
+            'num_constraints': n_eq + (ub_row if ub_row else 0),
+            'objective_value': result.fun if result.success else None,
+        }
+
+        if not result.success:
+            raise RuntimeError(f"Scipy LP solver failed: {result.message}")
+
+        if return_coefficients:
+            coefficients = {}
+            for qi, q in enumerate(self.tau):
+                coefficients[q] = {}
+                for ki in range(K):
+                    start = (qi * K + ki) * p
+                    coefficients[q][ki] = result.x[start:start + p]
+            return coefficients, solver_info
+        return None, solver_info
+
+    # ================================================================
+    # Regularization: LLA for SCAD / MCP / Elastic Net
+    # ================================================================
+
+    def _solve_with_lla(self, X, y, weights, max_iter=20, tol=1e-4):
+        """Solve via Local Linear Approximation for non-convex / elastic net penalties."""
+        n_outputs = y.shape[1]
+        p = X.shape[1]
+
+        # Initial solution from L1
+        init_pw = {q: {k: np.full(p - 1, self.alpha * self.l1_ratio)
+                       for k in range(n_outputs)} for q in self.tau}
+        coefficients, solver_info = self._solve_lp(X, y, weights, penalty_weights=init_pw)
+
+        for iteration in range(max_iter):
+            prev = {q: {k: coefficients[q][k].copy() for k in coefficients[q]}
+                    for q in coefficients}
+
+            pw = self._compute_penalty_weights(coefficients, p)
+            coefficients, solver_info = self._solve_lp(X, y, weights, penalty_weights=pw)
+
+            max_change = max(
+                np.max(np.abs(coefficients[q][k] - prev[q][k]))
+                for q in coefficients for k in coefficients[q]
+            )
+            if max_change < tol:
+                break
+
+        return coefficients, solver_info
+
+    def _compute_penalty_weights(self, coefficients, p):
+        """Compute adaptive penalty weights for LLA."""
+        pw = {}
+        eps = 1e-6
+        for q in self.tau:
+            pw[q] = {}
+            for k in coefficients[q]:
+                beta_abs = np.abs(coefficients[q][k][1:])  # exclude intercept
+
+                if self.regularization == 'elasticnet':
+                    w = self.alpha * self.l1_ratio + self.alpha * (1 - self.l1_ratio) * beta_abs
+                elif self.regularization == 'scad':
+                    a = 3.7
+                    w = np.where(
+                        beta_abs <= self.alpha,
+                        self.alpha,
+                        np.where(
+                            beta_abs <= a * self.alpha,
+                            np.maximum(a * self.alpha - beta_abs, 0) / (a - 1),
+                            0.0
+                        )
+                    )
+                elif self.regularization == 'mcp':
+                    gamma = 3.0
+                    w = np.maximum(self.alpha - beta_abs / gamma, 0.0)
+                else:
+                    w = np.full(len(beta_abs), self.alpha)
+
+                pw[q][k] = w
+        return pw
+
+    # ================================================================
+    # Inference: Bootstrap / Analytical / Cluster-Robust
+    # ================================================================
+
+    def _compute_bootstrap_se(self, X, y, weights):
+        """Bootstrap standard errors with empirical p-values and CIs."""
         np.random.seed(self.random_state)
         n_samples, n_features_plus_1 = X.shape
         n_outputs = y.shape[1]
-        n_quantiles = len(self.tau)
 
-        # Initialize storage for bootstrap coefficients
-        beta_bootstrap = {q: {output: np.zeros((self.n_bootstrap, n_features_plus_1)) 
+        beta_bootstrap = {q: {output: np.zeros((self.n_bootstrap, n_features_plus_1))
                              for output in self.output_names_} for q in self.tau}
 
-        # Determine the number of jobs
-        if self.n_jobs == -1:
-            n_jobs = multiprocessing.cpu_count()
-        else:
-            n_jobs = self.n_jobs
+        n_jobs = multiprocessing.cpu_count() if self.n_jobs == -1 else self.n_jobs
 
-        # Create a shared counter using multiprocessing.Manager
         manager = multiprocessing.Manager()
         counter = manager.Value('i', 0)
-
-        # Define a lock for thread-safe counter updates
         lock = manager.Lock()
 
-        # Function to perform a single bootstrap iteration
         def bootstrap_task(i):
-            sample_indices = np.random.choice(n_samples, n_samples, replace=True)
-            X_sample = X[sample_indices]
-            y_sample = y[sample_indices]
-            weights_sample = weights[sample_indices]
+            idx = np.random.choice(n_samples, n_samples, replace=True)
             try:
-                # Solve for multiple quantiles and outputs
-                beta_sample = self._solve_multiple_lp(X_sample, y_sample, weights_sample, return_coefficients=True)
+                beta_sample, _ = self._solve_lp(
+                    X[idx], y[idx], weights[idx], return_coefficients=True)
                 with lock:
                     counter.value += 1
                 return beta_sample
             except Exception:
                 with lock:
                     counter.value += 1
-                return {q: {output: np.full(n_features_plus_1, np.nan) for output in self.output_names_} 
-                        for q in self.tau}
+                return {q: {k: np.full(n_features_plus_1, np.nan)
+                           for k in range(n_outputs)} for q in self.tau}
 
-        # Function to update the progress bar
         def update_pbar():
             with tqdm(total=self.n_bootstrap, desc='Bootstrapping') as pbar:
-                previous = 0
+                prev = 0
                 while True:
                     with lock:
-                        current = counter.value
-                    delta = current - previous
-                    if delta > 0:
-                        pbar.update(delta)
-                        previous = current
-                    if current >= self.n_bootstrap:
+                        cur = counter.value
+                    if cur - prev > 0:
+                        pbar.update(cur - prev)
+                        prev = cur
+                    if cur >= self.n_bootstrap:
                         break
 
-        # Start the progress bar updater thread
         thread = threading.Thread(target=update_pbar)
         thread.start()
 
-        # Perform bootstrapping in parallel
         results = Parallel(n_jobs=n_jobs)(
             delayed(bootstrap_task)(i) for i in range(self.n_bootstrap)
         )
-
-        # Wait for the progress bar updater to finish
         thread.join()
 
-        # Populate bootstrap coefficients
-        for i, beta_sample in enumerate(results):
+        for i, bs in enumerate(results):
             for q in self.tau:
                 for k, output in enumerate(self.output_names_):
-                    beta_bootstrap[q][output][i, :] = beta_sample[q][k]
+                    beta_bootstrap[q][output][i, :] = bs[q][k]
 
-        # Compute standard errors, t-values, and p-values for each quantile and output
         for q in self.tau:
             for output in self.output_names_:
-                # Remove any iterations where the solver failed
-                valid_bootstrap = beta_bootstrap[q][output][~np.isnan(beta_bootstrap[q][output]).any(axis=1)]
+                valid = beta_bootstrap[q][output][
+                    ~np.isnan(beta_bootstrap[q][output]).any(axis=1)]
 
-                if valid_bootstrap.size == 0:
-                    raise Exception(f"All bootstrap iterations failed for quantile {q} and output {output}.")
+                if valid.shape[0] == 0:
+                    raise RuntimeError(
+                        f"All bootstrap iterations failed for quantile {q}, output {output}.")
 
-                # Compute standard errors
-                stderr = np.std(valid_bootstrap, axis=0, ddof=1)
+                stderr = np.std(valid, axis=0, ddof=1)
                 self.stderr_[q][output] = stderr
 
-                # Compute t-values and p-values
+                # Empirical p-values
+                pvalues = np.zeros(n_features_plus_1)
+                for j in range(n_features_plus_1):
+                    p_pos = np.mean(valid[:, j] > 0)
+                    p_neg = np.mean(valid[:, j] < 0)
+                    pvalues[j] = np.clip(2 * min(p_pos, p_neg), 0, 1)
+                self.pvalues_[q][output] = pvalues
+
                 coef_full = np.concatenate(([self.intercept_[q][output]], self.coef_[q][output]))
-                stderr_full = self.stderr_[q][output]
-                tvalues_full = coef_full / stderr_full
-                self.tvalues_[q][output] = tvalues_full
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    self.tvalues_[q][output] = np.where(stderr > 0, coef_full / stderr, 0.0)
 
-                df = len(y) - (X.shape[1] - 1)  # Degrees of freedom
-                pvalues_full = 2 * (1 - t.cdf(np.abs(tvalues_full), df=df))
-                self.pvalues_[q][output] = pvalues_full
+                ci_lo = np.percentile(valid, 2.5, axis=0)
+                ci_hi = np.percentile(valid, 97.5, axis=0)
+                index = ['Intercept'] + self.feature_names_
+                self.confidence_intervals_[q][output] = pd.DataFrame({
+                    'lower_2.5%': ci_lo, 'upper_97.5%': ci_hi
+                }, index=index)
 
-    def predict(self, X):
+    def _compute_analytical_se(self, X, y, method='analytical'):
         """
-        Predict using the quantile regression model.
+        Analytical standard errors using asymptotic sandwich estimator.
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
-            Samples. Can be a NumPy array or a pandas DataFrame.
+        method : str
+            'analytical' for IID (Koenker-Bassett 1978) or
+            'kernel' for heteroscedasticity-robust (Powell 1991).
+        """
+        n, p = X.shape
+
+        for q in self.tau:
+            for ki, output in enumerate(self.output_names_):
+                coef_full = np.concatenate(([self.intercept_[q][output]], self.coef_[q][output]))
+                residuals = y[:, ki] - X @ coef_full
+
+                XtX = X.T @ X
+                XtX_inv = np.linalg.inv(XtX)
+
+                if method == 'analytical':
+                    # IID: V = tau*(1-tau) * s^2 * (X'X)^{-1}
+                    sparsity = self._estimate_sparsity(residuals, q, n)
+                    cov = q * (1 - q) * sparsity ** 2 * XtX_inv
+                else:
+                    # Kernel sandwich: V = H^{-1} J H^{-1} / n
+                    h = self._hall_sheather_bandwidth(q, n)
+                    fhat = norm.pdf(residuals / h) / h
+                    H = X.T @ np.diag(fhat) @ X / n
+                    J = q * (1 - q) * XtX / n
+                    try:
+                        H_inv = np.linalg.inv(H)
+                    except np.linalg.LinAlgError:
+                        H_inv = np.linalg.pinv(H)
+                    cov = H_inv @ J @ H_inv / n
+
+                stderr = np.sqrt(np.maximum(np.diag(cov), 0))
+                self.stderr_[q][output] = stderr
+
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    tvals = np.where(stderr > 0, coef_full / stderr, 0.0)
+                self.tvalues_[q][output] = tvals
+
+                df = n - p
+                pvals = 2 * (1 - t.cdf(np.abs(tvals), df=df))
+                self.pvalues_[q][output] = pvals
+
+                index = ['Intercept'] + self.feature_names_
+                # Approximate CIs from normal distribution
+                z_crit = norm.ppf(0.975)
+                self.confidence_intervals_[q][output] = pd.DataFrame({
+                    'lower_2.5%': coef_full - z_crit * stderr,
+                    'upper_97.5%': coef_full + z_crit * stderr,
+                }, index=index)
+
+    def _compute_cluster_se(self, X, y, weights, clusters):
+        """
+        Cluster-robust standard errors via clustered sandwich estimator.
+        """
+        n, p = X.shape
+        unique_clusters = np.unique(clusters)
+        G = len(unique_clusters)
+
+        for q in self.tau:
+            for ki, output in enumerate(self.output_names_):
+                coef_full = np.concatenate(([self.intercept_[q][output]], self.coef_[q][output]))
+                residuals = y[:, ki] - X @ coef_full
+
+                # Bread: H = (1/n) X' D X where D = diag(f_i(0))
+                h = self._hall_sheather_bandwidth(q, n)
+                fhat = norm.pdf(residuals / h) / h
+                H = X.T @ np.diag(fhat) @ X / n
+                try:
+                    H_inv = np.linalg.inv(H)
+                except np.linalg.LinAlgError:
+                    H_inv = np.linalg.pinv(H)
+
+                # Meat: J_cluster = (1/n) sum_g (sum_{i in g} psi_i x_i)(sum_{i in g} psi_i x_i)'
+                psi = q - (residuals < 0).astype(float)  # subgradient
+                meat = np.zeros((p, p))
+                for g in unique_clusters:
+                    mask = clusters == g
+                    score_g = X[mask].T @ (psi[mask] * weights[mask])
+                    meat += np.outer(score_g, score_g)
+                meat /= n
+
+                # Small-sample correction
+                correction = G / (G - 1) * (n - 1) / (n - p)
+
+                cov = correction * H_inv @ meat @ H_inv / n
+                stderr = np.sqrt(np.maximum(np.diag(cov), 0))
+                self.stderr_[q][output] = stderr
+
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    tvals = np.where(stderr > 0, coef_full / stderr, 0.0)
+                self.tvalues_[q][output] = tvals
+
+                df = G - 1
+                pvals = 2 * (1 - t.cdf(np.abs(tvals), df=df))
+                self.pvalues_[q][output] = pvals
+
+                index = ['Intercept'] + self.feature_names_
+                t_crit = t.ppf(0.975, df=df)
+                self.confidence_intervals_[q][output] = pd.DataFrame({
+                    'lower_2.5%': coef_full - t_crit * stderr,
+                    'upper_97.5%': coef_full + t_crit * stderr,
+                }, index=index)
+
+    def _estimate_sparsity(self, residuals, tau, n):
+        """Estimate sparsity function s(tau) = 1/f(F^{-1}(tau)) via order statistics."""
+        h = self._hall_sheather_bandwidth(tau, n)
+        tau_lo = max(tau - h, 0.5 / n)
+        tau_hi = min(tau + h, 1 - 0.5 / n)
+
+        sorted_res = np.sort(residuals)
+        idx_lo = max(0, int(np.floor(n * tau_lo)))
+        idx_hi = min(n - 1, int(np.ceil(n * tau_hi)))
+        if idx_hi <= idx_lo:
+            idx_hi = min(idx_lo + 1, n - 1)
+
+        sparsity = (sorted_res[idx_hi] - sorted_res[idx_lo]) / (2 * h)
+        return max(sparsity, 1e-10)
+
+    @staticmethod
+    def _hall_sheather_bandwidth(tau, n, alpha=0.05):
+        """Hall-Sheather bandwidth for sparsity estimation."""
+        z_tau = norm.ppf(tau)
+        z_alpha = norm.ppf(1 - alpha / 2)
+        phi_tau = norm.pdf(z_tau)
+        return n ** (-1 / 3) * z_alpha ** (2 / 3) * (
+            1.5 * phi_tau ** 2 / (2 * z_tau ** 2 + 1)
+        ) ** (1 / 3)
+
+    # ================================================================
+    # Prediction
+    # ================================================================
+
+    def predict(self, X):
+        """
+        Predict using the fitted model.
 
         Returns
         -------
-        y_pred : dict of dicts of ndarrays
-            Predicted values for each quantile and output.
-            Structure: {tau: {output: array of predictions}}
+        y_pred : dict
+            ``{tau: {output: array}}``.
         """
-        if not all(all(fit for fit in self._is_fitted[q].values()) for q in self.tau):
-            raise Exception("Model is not fitted yet. Please call 'fit' before 'predict'.")
+        if not all(all(self._is_fitted[q].values()) for q in self.tau):
+            raise RuntimeError("Model is not fitted yet.")
 
-        # Handle pandas DataFrames
         if isinstance(X, pd.DataFrame):
             X = X.values
         else:
             X = np.asarray(X)
 
-        n_samples = X.shape[0]
-
-        # Add intercept term
-        X_augmented = np.hstack((np.ones((n_samples, 1)), X))
+        X_aug = np.hstack((np.ones((X.shape[0], 1)), X))
 
         y_pred = {}
         for q in self.tau:
             y_pred[q] = {}
             for output in self.output_names_:
-                coefficients = np.concatenate(([self.intercept_[q][output]], self.coef_[q][output]))
-                y_pred[q][output] = X_augmented @ coefficients
+                coef = np.concatenate(([self.intercept_[q][output]], self.coef_[q][output]))
+                y_pred[q][output] = X_aug @ coef
+
+        if self.enforce_non_crossing_predict and len(self.tau) > 1:
+            for output in self.output_names_:
+                pred_mat = np.column_stack([y_pred[q][output] for q in self.tau])
+                pred_sorted = np.sort(pred_mat, axis=1)
+                for idx, q in enumerate(self.tau):
+                    y_pred[q][output] = pred_sorted[:, idx]
+
         return y_pred
 
-    def summary(self):
+    def predict_interval(self, X, coverage=0.90):
         """
-        Return a summary of the regression results.
+        Predict intervals using fitted quantiles.
+
+        Uses the fitted quantiles closest to ``(1-coverage)/2`` and
+        ``1-(1-coverage)/2`` as lower/upper bounds.
+
+        Parameters
+        ----------
+        X : array-like
+            Samples.
+        coverage : float, default=0.90
+            Desired coverage probability.
 
         Returns
         -------
-        summary_dict : dict of dicts of pandas DataFrames
-            Summary tables for each quantile and output with coefficients, standard errors, t-values, and p-values.
-            Structure: {tau: {output: DataFrame}}
+        result : dict
+            ``{output: {'lower': array, 'median': array, 'upper': array}}``.
         """
-        if not all(all(fit for fit in self._is_fitted[q].values()) for q in self.tau):
-            raise Exception("Model is not fitted yet. Please call 'fit' before 'summary'.")
+        if len(self.tau) < 2:
+            raise ValueError("predict_interval requires at least 2 fitted quantiles.")
+
+        target_lo = (1 - coverage) / 2
+        target_hi = 1 - target_lo
+        target_med = 0.5
+
+        tau_lo = min(self.tau, key=lambda t: abs(t - target_lo))
+        tau_hi = min(self.tau, key=lambda t: abs(t - target_hi))
+        tau_med = min(self.tau, key=lambda t: abs(t - target_med))
+
+        y_pred = self.predict(X)
+
+        result = {}
+        for output in self.output_names_:
+            result[output] = {
+                'lower': y_pred[tau_lo][output],
+                'median': y_pred[tau_med][output],
+                'upper': y_pred[tau_hi][output],
+                'tau_lower': tau_lo,
+                'tau_median': tau_med,
+                'tau_upper': tau_hi,
+            }
+        return result
+
+    # ================================================================
+    # Model evaluation
+    # ================================================================
+
+    def score(self, X, y, sample_weight=None):
+        """
+        Return negative mean pinball loss (higher is better, sklearn convention).
+        """
+        y_pred = self.predict(X)
+
+        if isinstance(y, pd.DataFrame):
+            y = y.values
+        elif isinstance(y, pd.Series):
+            y = y.values.reshape(-1, 1)
+        else:
+            y = np.asarray(y)
+            if y.ndim == 1:
+                y = y.reshape(-1, 1)
+
+        total_loss = 0.0
+        count = 0
+        for q in self.tau:
+            for ki, output in enumerate(self.output_names_):
+                resid = y[:, ki] - y_pred[q][output]
+                loss = np.where(resid >= 0, q * resid, (q - 1) * resid)
+                if sample_weight is not None:
+                    total_loss += np.average(loss, weights=sample_weight)
+                else:
+                    total_loss += np.mean(loss)
+                count += 1
+
+        return -total_loss / count
+
+    @property
+    def pseudo_r_squared_(self):
+        """
+        Koenker-Machado (1999) pseudo R-squared.
+
+        ``R1(tau) = 1 - fitted_pinball_loss / null_pinball_loss``
+
+        Returns
+        -------
+        dict : ``{tau: {output: float}}``
+        """
+        if self._pinball_loss_ is None:
+            raise RuntimeError("Model is not fitted yet.")
+        return {
+            q: {
+                o: 1 - self._pinball_loss_[q][o] / self._null_pinball_loss_[q][o]
+                if self._null_pinball_loss_[q][o] > 0 else 0.0
+                for o in self.output_names_
+            }
+            for q in self.tau
+        }
+
+    def summary(self):
+        """
+        Summary tables with coefficients, SEs, t-values, p-values, and CIs.
+
+        Returns
+        -------
+        dict : ``{tau: {output: DataFrame}}``
+        """
+        if not all(all(self._is_fitted[q].values()) for q in self.tau):
+            raise RuntimeError("Model is not fitted yet.")
 
         summary_dict = {}
         for q in self.tau:
@@ -484,52 +1028,269 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
             for output in self.output_names_:
                 coef = np.concatenate(([self.intercept_[q][output]], self.coef_[q][output]))
                 index = ['Intercept'] + self.feature_names_
-                summary_df = pd.DataFrame({
+                ci = self.confidence_intervals_[q][output]
+                data = {
                     'Coefficient': coef,
                     'Std. Error': self.stderr_[q][output],
                     't-value': self.tvalues_[q][output],
                     'P>|t|': self.pvalues_[q][output],
-                }, index=index)
-                summary_dict[q][output] = summary_df
+                }
+                if ci is not None:
+                    data['CI 2.5%'] = ci['lower_2.5%'].values
+                    data['CI 97.5%'] = ci['upper_97.5%'].values
+                summary_dict[q][output] = pd.DataFrame(data, index=index)
         return summary_dict
 
-    def get_params(self, deep=True):
+    # ================================================================
+    # Visualization
+    # ================================================================
+
+    def plot_quantile_process(self, feature=None, figsize=None, ax=None):
         """
-        Get parameters for this estimator.
+        Plot coefficient estimates across quantiles with confidence intervals.
 
         Parameters
         ----------
-        deep : bool, default=True
-            If True, will return the parameters for this estimator and contained subobjects that are estimators.
+        feature : str, list of str, or None
+            Feature(s) to plot. None plots all features.
+        figsize : tuple, optional
+            Figure size.
+        ax : matplotlib Axes, optional
+            Axes to plot on (single feature only).
 
         Returns
         -------
-        params : dict
-            Parameter names mapped to their values.
+        fig : matplotlib Figure
         """
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            raise ImportError("Plotting requires matplotlib. Install: pip install matplotlib")
+
+        if len(self.tau) < 2:
+            raise ValueError("Quantile process plot requires at least 2 fitted quantiles.")
+
+        if feature is None:
+            features = ['Intercept'] + self.feature_names_
+        elif isinstance(feature, str):
+            features = [feature]
+        else:
+            features = list(feature)
+
+        all_names = ['Intercept'] + self.feature_names_
+        n_features = len(features)
+        n_outputs = len(self.output_names_)
+        n_plots = n_features * n_outputs
+
+        if ax is not None:
+            axes = [ax] * n_plots
+            fig = ax.figure
+        else:
+            ncols = min(n_features, 3)
+            nrows = int(np.ceil(n_plots / ncols))
+            fig, axes_arr = plt.subplots(nrows, ncols,
+                                         figsize=figsize or (5 * ncols, 4 * nrows),
+                                         squeeze=False)
+            axes = axes_arr.flatten()
+
+        plot_idx = 0
+        for output in self.output_names_:
+            for feat in features:
+                cur_ax = axes[plot_idx]
+                feat_idx = all_names.index(feat)
+
+                coefs, ci_lo, ci_hi = [], [], []
+                for q in self.tau:
+                    full = np.concatenate(([self.intercept_[q][output]], self.coef_[q][output]))
+                    coefs.append(full[feat_idx])
+                    ci = self.confidence_intervals_[q][output]
+                    if ci is not None:
+                        ci_lo.append(ci.iloc[feat_idx, 0])
+                        ci_hi.append(ci.iloc[feat_idx, 1])
+
+                cur_ax.plot(self.tau, coefs, 'b-o', markersize=4, label='QR estimate')
+                if ci_lo:
+                    cur_ax.fill_between(self.tau, ci_lo, ci_hi, alpha=0.2, color='blue',
+                                        label='95% CI')
+                cur_ax.axhline(y=0, color='gray', linestyle='--', linewidth=0.5)
+                cur_ax.set_xlabel('\u03c4')
+                cur_ax.set_ylabel('Coefficient')
+                title = feat if n_outputs == 1 else f'{feat} ({output})'
+                cur_ax.set_title(title)
+                cur_ax.legend(fontsize=8)
+                plot_idx += 1
+
+        for i in range(plot_idx, len(axes)):
+            axes[i].set_visible(False)
+
+        fig.tight_layout()
+        return fig
+
+    # ================================================================
+    # Scikit-learn API
+    # ================================================================
+
+    def get_params(self, deep=True):
         return {
             'tau': self.tau,
             'n_bootstrap': self.n_bootstrap,
             'random_state': self.random_state,
             'regularization': self.regularization,
             'alpha': self.alpha,
+            'l1_ratio': self.l1_ratio,
             'n_jobs': self.n_jobs,
+            'solver_backend': self.solver_backend,
+            'solver_tol': self.solver_tol,
+            'solver_time_limit': self.solver_time_limit,
+            'enforce_non_crossing_predict': self.enforce_non_crossing_predict,
+            'se_method': self.se_method,
+            'use_sparse': self.use_sparse,
         }
 
     def set_params(self, **params):
-        """
-        Set the parameters of this estimator.
-
-        Parameters
-        ----------
-        **params : dict
-            Estimator parameters.
-
-        Returns
-        -------
-        self : object
-            Returns self.
-        """
         for key, value in params.items():
             setattr(self, key, value)
         return self
+
+
+# ====================================================================
+# Censored Quantile Regression
+# ====================================================================
+
+class CensoredQuantileRegression(QuantileRegression):
+    """
+    Censored (survival) quantile regression via iterative reweighting.
+
+    Implements Powell (1986) iterative algorithm for right- or left-censored data.
+    At each iteration, censored observations are included or excluded based on
+    whether the estimated conditional quantile exceeds the censoring point.
+
+    Parameters
+    ----------
+    censoring : str, default='right'
+        Type of censoring: 'right' or 'left'.
+    max_censor_iter : int, default=50
+        Maximum number of censored QR iterations.
+    censor_tol : float, default=1e-4
+        Convergence tolerance for coefficient changes between iterations.
+    **kwargs
+        Additional parameters passed to QuantileRegression.
+
+    Examples
+    --------
+    >>> model = CensoredQuantileRegression(tau=0.5, censoring='right',
+    ...                                     n_bootstrap=50)
+    >>> model.fit(X, y_observed, event_indicator=delta)
+    """
+
+    def __init__(self, censoring='right', max_censor_iter=50, censor_tol=1e-4, **kwargs):
+        super().__init__(**kwargs)
+        self.censoring = censoring
+        self.max_censor_iter = max_censor_iter
+        self.censor_tol = censor_tol
+
+    def fit(self, X, y, event_indicator, weights=None, clusters=None):
+        """
+        Fit censored quantile regression.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Training data.
+        y : array-like of shape (n_samples,) or (n_samples, n_outputs)
+            Observed values (min of event time and censoring time for right-censoring).
+        event_indicator : array-like of shape (n_samples,)
+            1 = event observed (uncensored), 0 = censored.
+        weights : array-like, optional
+            Observation weights.
+        clusters : array-like, optional
+            Cluster labels for cluster-robust SEs.
+
+        Returns
+        -------
+        self
+        """
+        X, y, weights = self._validate_inputs(X, y, weights)
+        self._validate_tau()
+        event = np.asarray(event_indicator).ravel()
+
+        n_samples, n_features = X.shape
+        X_augmented = np.hstack((np.ones((n_samples, 1)), X))
+
+        self._init_storage(n_features)
+        self._X_aug = X_augmented
+        self._y = y
+        self._weights = weights
+
+        # Initial fit on all data (treating all as uncensored)
+        self._fit_coefficients(X_augmented, y, weights)
+
+        # Iterative Powell algorithm
+        for iteration in range(self.max_censor_iter):
+            prev_coef = {}
+            for q in self.tau:
+                prev_coef[q] = {}
+                for output in self.output_names_:
+                    prev_coef[q][output] = np.concatenate(
+                        ([self.intercept_[q][output]], self.coef_[q][output])
+                    )
+
+            # Construct working weights
+            iter_weights = weights.copy()
+            for q in self.tau:
+                for ki, output in enumerate(self.output_names_):
+                    coef_full = prev_coef[q][output]
+                    predicted = X_augmented @ coef_full
+
+                    for i in range(n_samples):
+                        if event[i] == 0:  # censored
+                            if self.censoring == 'right':
+                                # Include if predicted quantile > censoring point
+                                if predicted[i] <= y[i, ki]:
+                                    iter_weights[i] = 0.0
+                            else:  # left censoring
+                                if predicted[i] >= y[i, ki]:
+                                    iter_weights[i] = 0.0
+
+            # Re-fit with adjusted weights
+            nonzero = iter_weights > 0
+            if np.sum(nonzero) < X_augmented.shape[1]:
+                warnings.warn("Too few uncensored observations for estimation.")
+                break
+
+            self._fit_coefficients(X_augmented, y, iter_weights)
+
+            # Check convergence
+            max_change = 0
+            for q in self.tau:
+                for output in self.output_names_:
+                    cur = np.concatenate(([self.intercept_[q][output]], self.coef_[q][output]))
+                    max_change = max(max_change, np.max(np.abs(cur - prev_coef[q][output])))
+
+            if max_change < self.censor_tol:
+                break
+
+        # Compute pinball loss and standard errors on final model
+        self._compute_pinball_losses(X_augmented, y, weights)
+
+        if clusters is not None:
+            self._compute_cluster_se(X_augmented, y, weights, np.asarray(clusters))
+        elif self.se_method == 'bootstrap':
+            self._compute_bootstrap_se(X_augmented, y, weights)
+        elif self.se_method in ('analytical', 'kernel'):
+            self._compute_analytical_se(X_augmented, y, method=self.se_method)
+
+        for q in self.tau:
+            for output in self.output_names_:
+                self._is_fitted[q][output] = True
+
+        return self
+
+    def get_params(self, deep=True):
+        params = super().get_params(deep=deep)
+        params.update({
+            'censoring': self.censoring,
+            'max_censor_iter': self.max_censor_iter,
+            'censor_tol': self.censor_tol,
+        })
+        return params

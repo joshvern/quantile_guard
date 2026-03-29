@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quantile-regression-pdlp"
-version = "0.1.1"
+version = "0.2.0"
 description = "Quantile regression via linear programming using Google OR-Tools PDLP, with a scikit-learn compatible API and statistical summaries."
 readme = "README.md"
 license = { text = "MIT" }
@@ -39,6 +39,16 @@ Documentation = "https://joshvern.github.io/quantile_regression_pdlp/"
 test = [
   "pytest>=7",
 ]
+formula = [
+  "patsy>=0.5.0",
+]
+plot = [
+  "matplotlib>=3.1.0",
+]
+all = [
+  "patsy>=0.5.0",
+  "matplotlib>=3.1.0",
+]
 
 [tool.setuptools]
 include-package-data = true
@@ -47,5 +57,5 @@ include-package-data = true
 where = ["src"]
 
 [tool.pytest.ini_options]
-addopts = "-q"
+addopts = "-q --ignore=tests/bench_vs_sklearn.py --ignore=tests/bench_vs_r.py"
 testpaths = ["tests"]
