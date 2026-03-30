@@ -18,6 +18,21 @@ import pytest
 
 from quantile_regression_pdlp import QuantileRegression, CensoredQuantileRegression
 
+try:
+    import matplotlib
+    _has_matplotlib = True
+except ImportError:
+    _has_matplotlib = False
+
+try:
+    import patsy
+    _has_patsy = True
+except ImportError:
+    _has_patsy = False
+
+requires_matplotlib = pytest.mark.skipif(not _has_matplotlib, reason="matplotlib not installed")
+requires_patsy = pytest.mark.skipif(not _has_patsy, reason="patsy not installed")
+
 
 # ---- Fixtures ----
 
@@ -116,6 +131,7 @@ class TestAnalyticalSE:
 
 # ==== 2. Quantile Process Plots ====
 
+@requires_matplotlib
 class TestQuantileProcessPlot:
 
     def test_plot_runs_without_error(self, linear_data):
@@ -425,6 +441,7 @@ class TestGoodnessOfFit:
 
 # ==== 8. Formula Interface ====
 
+@requires_patsy
 class TestFormulaInterface:
 
     def test_formula_basic(self):
@@ -630,6 +647,7 @@ class TestIntegration:
         assert model.coef_[0.5]['y'] is not None
         assert np.all(model.stderr_[0.5]['y'] > 0)
 
+    @requires_matplotlib
     def test_full_pipeline(self, linear_data):
         """End-to-end: fit, predict, score, summary, plot."""
         import matplotlib
