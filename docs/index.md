@@ -49,6 +49,7 @@ model.plot_quantile_process(feature='X1')
 | Conformal calibration (CQR) | Yes | No | No |
 | Evaluation metrics suite | Yes | Partial | No |
 | Crossing detection + fix | Yes | No | No |
+| Calibration diagnostics | Yes | No | No |
 | Quantile process plots | Yes | No | No |
 | Pseudo R² | Yes | No | Yes |
 | Formula interface | Yes | No | Yes |
@@ -56,4 +57,4 @@ model.plot_quantile_process(feature='X1')
 | Sparse solver mode | Yes | No | No |
 | Sklearn pipeline compatible | Yes | Yes | No |
 
-Next: [Usage](usage.md) | [Evaluation](evaluation.md) | [Crossing](crossing.md) | [Conformal](conformal.md) | [API Reference](api.md) | [Theory](theory.md)
+Next: [Usage](usage.md) | [Evaluation](evaluation.md) | [Crossing](crossing.md) | [Conformal](conformal.md) | [Calibration](calibration.md) | [Benchmarks](benchmarks.md) | [API Reference](api.md) | [Theory](theory.md)

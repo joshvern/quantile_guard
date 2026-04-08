@@ -17,6 +17,8 @@ nav:
   - Evaluation: evaluation.md
   - Crossing: crossing.md
   - Conformal: conformal.md
+  - Calibration: calibration.md
+  - Benchmarks: benchmarks.md
   - API: api.md
   - Theory: theory.md
 

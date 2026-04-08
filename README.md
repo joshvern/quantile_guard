@@ -24,6 +24,7 @@ Optimization-based quantile regression built on Google OR-Tools. Scikit-learn AP
 - **Analytical, bootstrap, kernel, and cluster-robust** standard errors
 - **Conformalized quantile regression** for calibrated prediction intervals
 - **Evaluation metrics**: pinball loss, coverage, interval score, crossing diagnostics
+- **Calibration diagnostics**: coverage by group/bin, nominal vs empirical, sharpness analysis
 - **Crossing detection and rearrangement** for any quantile model's predictions
 - **Prediction intervals**, quantile process plots, and pseudo R²
 - **Censored quantile regression** for survival data
@@ -43,6 +44,7 @@ Optimization-based quantile regression built on Google OR-Tools. Scikit-learn AP
 | Conformal calibration (CQR) | Yes | No | No |
 | Evaluation metrics suite | Yes | Partial | No |
 | Crossing detection + fix | Yes | No | No |
+| Calibration diagnostics | Yes | No | No |
 | Prediction intervals | Yes | No | No |
 | Pseudo R² | Yes | No | Yes |
 | Formula interface | Yes | No | Yes |
@@ -158,6 +160,25 @@ QuantileRegression(tau=0.5, use_sparse=True)
 
 # Solver tuning
 QuantileRegression(tau=0.5, solver_tol=1e-8, solver_time_limit=60.0)
+```
+
+## Benchmarks
+
+Validated against sklearn `QuantileRegressor` and statsmodels `QuantReg` across multiple dataset sizes and quantile configurations. All three solve the same LP, so pinball loss is equivalent — the difference is in what this package provides *around* the fit.
+
+| n | quantiles | Pinball loss (all equal) | Crossing rate | This package extras |
+|---:|---:|---:|---:|---|
+| 500 | 3 | 0.2291 | 0% (all) | Joint fit, non-crossing guarantee, SEs, CQR |
+| 2000 | 5 | 0.2238 | 0% (all) | + evaluation metrics, crossing tools |
+| 5000 | 5 | 0.2347 | 0% (all) | + censored QR, SCAD/MCP/elastic net |
+
+Full benchmark results, methodology, and reproduction instructions: [Benchmarks docs](https://joshvern.github.io/quantile_regression_pdlp/benchmarks/)
+
+```bash
+# Reproduce benchmarks locally
+pip install -e ".[benchmark]"
+python benchmarks/run_linear_baselines.py
+python benchmarks/report.py
 ```
 
 ## Documentation
