@@ -3,3 +3,8 @@
 from .quantile_regression import QuantileRegression, CensoredQuantileRegression
 
 __all__ = ['QuantileRegression', 'CensoredQuantileRegression']
+
+# Submodules available via:
+#   from quantile_regression_pdlp.metrics import pinball_loss, ...
+#   from quantile_regression_pdlp.postprocess import rearrange_quantiles, ...
+#   from quantile_regression_pdlp.conformal import ConformalQuantileRegression

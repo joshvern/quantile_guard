@@ -2,6 +2,16 @@
 
 This project follows Semantic Versioning (SemVer): https://semver.org/
 
+## 0.3.0 - Metrics, crossing tools, and conformal calibration
+
+### New features
+- **Metrics module** (`quantile_regression_pdlp.metrics`) — standalone evaluation functions: `pinball_loss`, `multi_quantile_pinball_loss`, `empirical_coverage`, `mean_interval_width`, `crossing_rate`, `crossing_magnitude`, `interval_score`, `quantile_evaluation_report`.
+- **Postprocess module** (`quantile_regression_pdlp.postprocess`) — crossing detection and rearrangement: `check_crossing`, `crossing_summary`, `rearrange_quantiles`.
+- **Conformalized Quantile Regression** (`quantile_regression_pdlp.conformal`) — `ConformalQuantileRegression` with split conformal calibration for finite-sample coverage guarantees.
+- Added documentation pages: Evaluation, Crossing, Conformal.
+- Added example scripts: `evaluate_quantile_model.py`, `fix_crossing_quantiles.py`, `conformal_intervals.py`.
+- Added feature comparison table to README.
+
 ## 0.2.0 - Feature release
 
 ### New features

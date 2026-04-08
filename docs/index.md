@@ -40,11 +40,15 @@ model.plot_quantile_process(feature='X1')
 | Non-crossing constraints | Yes | No | No |
 | Multi-output | Yes | No | No |
 | Analytical SEs | Yes | No | Yes |
+| Kernel (robust) SEs | Yes | No | Yes |
 | Cluster-robust SEs | Yes | No | No |
 | Bootstrap SEs | Yes | No | No |
 | Empirical p-values + CIs | Yes | No | No |
 | L1 / Elastic Net / SCAD / MCP | Yes | L1 only | No |
 | Prediction intervals | Yes | No | No |
+| Conformal calibration (CQR) | Yes | No | No |
+| Evaluation metrics suite | Yes | Partial | No |
+| Crossing detection + fix | Yes | No | No |
 | Quantile process plots | Yes | No | No |
 | Pseudo R² | Yes | No | Yes |
 | Formula interface | Yes | No | Yes |
@@ -52,4 +56,4 @@ model.plot_quantile_process(feature='X1')
 | Sparse solver mode | Yes | No | No |
 | Sklearn pipeline compatible | Yes | Yes | No |
 
-Next: [Usage](usage.md) | [API Reference](api.md) | [Theory](theory.md)
+Next: [Usage](usage.md) | [Evaluation](evaluation.md) | [Crossing](crossing.md) | [Conformal](conformal.md) | [API Reference](api.md) | [Theory](theory.md)

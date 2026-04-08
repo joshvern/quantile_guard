@@ -14,6 +14,9 @@ theme:
 nav:
   - Home: index.md
   - Usage: usage.md
+  - Evaluation: evaluation.md
+  - Crossing: crossing.md
+  - Conformal: conformal.md
   - API: api.md
   - Theory: theory.md
 

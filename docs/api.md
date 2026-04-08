@@ -112,3 +112,100 @@ All `QuantileRegression` parameters are also accepted.
 
 - **event_indicator**: `(n_samples,)` -- 1 = event observed, 0 = censored.
 - All other parameters same as `QuantileRegression.fit()`.
+
+---
+
+## `ConformalQuantileRegression`
+
+```python
+from quantile_regression_pdlp.conformal import ConformalQuantileRegression
+```
+
+Split conformal calibration for prediction intervals with finite-sample coverage
+guarantees. Wraps any base quantile estimator.
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `base_estimator` | estimator | required | Quantile model with ≥ 2 quantiles in `tau`. |
+| `coverage` | `float` | `0.90` | Target coverage level in (0, 1). |
+| `calibration_size` | `float` | `0.25` | Fraction of data held out for calibration. |
+| `random_state` | `int` or `None` | `None` | Seed for train/calibration split. |
+
+### Methods
+
+#### `fit(X, y)`
+
+Fit base estimator on training split and calibrate on held-out data.
+
+#### `predict_interval(X)`
+
+Returns `dict[str, dict]` -- `{output: {'lower': array, 'upper': array, 'width': array}}`.
+
+#### `empirical_coverage(X, y)`
+
+Returns `dict[str, float]` -- empirical coverage per output.
+
+#### `interval_width(X)`
+
+Returns `dict[str, float]` -- mean interval width per output.
+
+### Attributes (after fitting)
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `offset_` | `dict` | `{output: float}` -- calibrated conformity score quantile. |
+| `lower_tau_` | `float` | Lower quantile from base estimator. |
+| `upper_tau_` | `float` | Upper quantile from base estimator. |
+| `base_estimator_` | estimator | Fitted clone of the base estimator. |
+
+---
+
+## `quantile_regression_pdlp.metrics`
+
+Standalone evaluation functions for quantile predictions from any model.
+
+```python
+from quantile_regression_pdlp.metrics import (
+    pinball_loss,
+    multi_quantile_pinball_loss,
+    empirical_coverage,
+    mean_interval_width,
+    crossing_rate,
+    crossing_magnitude,
+    interval_score,
+    quantile_evaluation_report,
+)
+```
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `pinball_loss` | `(y_true, y_pred, tau) -> float` | Mean pinball loss for a single quantile. |
+| `multi_quantile_pinball_loss` | `(y_true, predictions, taus) -> dict` | Per-quantile pinball loss. |
+| `empirical_coverage` | `(y_true, lower, upper) -> float` | Fraction of points inside interval. |
+| `mean_interval_width` | `(lower, upper) -> float` | Mean interval width. |
+| `crossing_rate` | `(predictions, taus) -> float` | Fraction of samples with crossing quantiles. |
+| `crossing_magnitude` | `(predictions, taus) -> float` | Mean severity of crossings. |
+| `interval_score` | `(y_true, lower, upper, alpha) -> float` | Gneiting-Raftery interval score. |
+| `quantile_evaluation_report` | `(...) -> dict` | Full evaluation summary. |
+
+---
+
+## `quantile_regression_pdlp.postprocess`
+
+Crossing detection and rearrangement for quantile predictions.
+
+```python
+from quantile_regression_pdlp.postprocess import (
+    check_crossing,
+    crossing_summary,
+    rearrange_quantiles,
+)
+```
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `check_crossing` | `(predictions, taus) -> ndarray[bool]` | Boolean mask of samples with crossings. |
+| `crossing_summary` | `(predictions, taus) -> dict` | Rate, magnitude, worst rows. |
+| `rearrange_quantiles` | `(predictions, taus) -> ndarray` | Per-row sort to enforce monotonicity. |

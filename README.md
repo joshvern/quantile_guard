@@ -21,11 +21,33 @@ Optimization-based quantile regression built on Google OR-Tools. Scikit-learn AP
 - Fits **multiple quantiles jointly** with non-crossing constraints
 - **Multi-output** regression in a single model
 - **SCAD, MCP, and elastic net** penalties (not just L1)
-- **Analytical, bootstrap, and cluster-robust** standard errors
+- **Analytical, bootstrap, kernel, and cluster-robust** standard errors
+- **Conformalized quantile regression** for calibrated prediction intervals
+- **Evaluation metrics**: pinball loss, coverage, interval score, crossing diagnostics
+- **Crossing detection and rearrangement** for any quantile model's predictions
 - **Prediction intervals**, quantile process plots, and pseudo R²
 - **Censored quantile regression** for survival data
 - Scipy sparse solver for **large-scale** problems
 - Validated against sklearn, statsmodels, and R's `quantreg`
+
+| Feature | This package | sklearn | statsmodels |
+|---------|:---:|:---:|:---:|
+| Multiple quantiles (joint) | Yes | No | No |
+| Non-crossing constraints | Yes | No | No |
+| Multi-output | Yes | No | No |
+| Analytical SEs | Yes | No | Yes |
+| Kernel (robust) SEs | Yes | No | Yes |
+| Cluster-robust SEs | Yes | No | No |
+| Bootstrap SEs | Yes | No | No |
+| L1 / Elastic Net / SCAD / MCP | Yes | L1 only | No |
+| Conformal calibration (CQR) | Yes | No | No |
+| Evaluation metrics suite | Yes | Partial | No |
+| Crossing detection + fix | Yes | No | No |
+| Prediction intervals | Yes | No | No |
+| Pseudo R² | Yes | No | Yes |
+| Formula interface | Yes | No | Yes |
+| Censored QR | Yes | No | No |
+| Sklearn pipeline compatible | Yes | Yes | No |
 
 ## Installation
 
