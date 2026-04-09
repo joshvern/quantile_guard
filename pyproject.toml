@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quantile-regression-pdlp"
-version = "0.4.1"
+version = "0.4.2"
 description = "Non-crossing quantile regression toolkit with joint multi-quantile fitting, inference, conformal calibration, and evaluation. Scikit-learn compatible."
 readme = "README.md"
 license = { text = "MIT" }
