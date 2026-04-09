@@ -1,15 +1,40 @@
 site_name: quantile-guard
 site_description: Non-crossing quantile models with built-in inference, calibration, and evaluation.
-site_url: https://joshvern.github.io/quantile-guard/
-repo_url: https://github.com/joshvern/quantile-guard
-repo_name: joshvern/quantile-guard
+site_url: https://joshvern.github.io/quantile_guard/
+repo_url: https://github.com/joshvern/quantile_guard
+repo_name: joshvern/quantile_guard
 edit_uri: edit/main/docs/
 
 theme:
   name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
   features:
+    - navigation.instant
     - navigation.sections
+    - navigation.expand
+    - navigation.top
     - content.code.copy
+    - content.code.annotate
+    - toc.follow
+    - search.suggest
+    - search.highlight
 
 nav:
   - Home: index.md
@@ -25,11 +50,17 @@ nav:
 
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
   - toc:
       permalink: true
+  - pymdownx.details
   - pymdownx.superfences
-  - pymdownx.highlight
+  - pymdownx.highlight:
+      anchor_linenums: true
   - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
   - pymdownx.arithmatex:
       generic: true
 

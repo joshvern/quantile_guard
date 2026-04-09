@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quantile-guard"
-version = "0.5.0"
+version = "0.5.1"
 description = "Non-crossing quantile regression toolkit with joint multi-quantile fitting, inference, conformal calibration, and evaluation. Scikit-learn compatible."
 readme = "README.md"
 license = { text = "MIT" }
@@ -31,9 +31,9 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/joshvern/quantile-guard"
-Issues = "https://github.com/joshvern/quantile-guard/issues"
-Documentation = "https://joshvern.github.io/quantile-guard/"
+Repository = "https://github.com/joshvern/quantile_guard"
+Issues = "https://github.com/joshvern/quantile_guard/issues"
+Documentation = "https://joshvern.github.io/quantile_guard/"
 
 [project.optional-dependencies]
 test = [

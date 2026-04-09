@@ -5,20 +5,30 @@
 
 [pypi-badge]: https://img.shields.io/pypi/v/quantile-guard.svg
 [py-badge]: https://img.shields.io/pypi/pyversions/quantile-guard.svg
-[ci-badge]: https://github.com/joshvern/quantile-guard/actions/workflows/ci.yml/badge.svg
-[docs-badge]: https://github.com/joshvern/quantile-guard/actions/workflows/docs.yml/badge.svg
+[ci-badge]: https://github.com/joshvern/quantile_guard/actions/workflows/ci.yml/badge.svg
+[docs-badge]: https://github.com/joshvern/quantile_guard/actions/workflows/docs.yml/badge.svg
 
 [pypi-link]: https://pypi.org/project/quantile-guard/
-[ci-link]: https://github.com/joshvern/quantile-guard/actions/workflows/ci.yml
-[docs-link]: https://joshvern.github.io/quantile-guard/
+[ci-link]: https://github.com/joshvern/quantile_guard/actions/workflows/ci.yml
+[docs-link]: https://joshvern.github.io/quantile_guard/
 
 # quantile-guard
 
-**Non-crossing quantile models with built-in inference, calibration, and evaluation.**
+**Non-crossing quantile regression with inference, calibration, and evaluation — in one toolkit.**
 
-A quantile modeling toolkit — not just a quantile regressor. Fits multiple quantiles jointly with monotonicity constraints that guarantee predictions never cross. Wraps the result in inference, conformal calibration, evaluation metrics, and crossing diagnostics.
+Fit multiple quantiles jointly with monotonicity constraints that guarantee predictions never cross. Get standard errors, p-values, conformal calibration, and evaluation metrics out of the box. Scikit-learn compatible.
 
-Scikit-learn compatible. Validated against sklearn, statsmodels, and R's `quantreg`.
+---
+
+## Who Is This For
+
+- **Data scientists** building prediction intervals for production systems where crossed quantiles break downstream logic
+- **Researchers & econometricians** who need valid statistical inference (SEs, p-values, CIs) on quantile regression coefficients
+- **ML engineers** who want a drop-in sklearn-compatible estimator that guarantees monotone quantile predictions
+- **Risk analysts & actuaries** modeling conditional tail distributions with censored or survival data
+- **Anyone evaluating quantile models** — the metrics and diagnostics modules work with predictions from XGBoost, LightGBM, or any other source
+
+---
 
 ## Why Not Just Fit Quantiles Independently?
 
@@ -37,8 +47,6 @@ Full benchmark methodology and results: [Benchmarks](https://joshvern.github.io/
 
 ## What You Get
 
-This is a **toolkit**, not a single estimator. It covers the workflow from raw quantile regression through calibrated prediction intervals:
-
 | Workflow | What it does |
 |----------|-------------|
 | **Joint Quantile Regression** | Fit multiple quantiles in one call with non-crossing guarantees |
@@ -48,7 +56,8 @@ This is a **toolkit**, not a single estimator. It covers the workflow from raw q
 | **Calibration Diagnostics** | Coverage by group/bin, nominal vs empirical, sharpness analysis |
 | **Crossing Detection & Repair** | Diagnose and fix crossings from any quantile model |
 
-### Feature Comparison
+<details>
+<summary><strong>Feature comparison vs sklearn & statsmodels</strong></summary>
 
 | Feature | This package | sklearn | statsmodels |
 |---------|:---:|:---:|:---:|
@@ -63,9 +72,11 @@ This is a **toolkit**, not a single estimator. It covers the workflow from raw q
 | Crossing detection + fix | Yes | No | No |
 | Censored QR | Yes | No | No |
 | Prediction intervals | Yes | No | No |
-| Pseudo R² | Yes | No | Yes |
+| Pseudo R-squared | Yes | No | Yes |
 | Formula interface | Yes | No | Yes |
 | Sklearn pipeline compatible | Yes | Yes | No |
+
+</details>
 
 ## Installation
 
@@ -76,9 +87,9 @@ pip install quantile-guard
 Optional extras:
 
 ```bash
-pip install quantile-guard[all]   # formula interface + plots
-pip install quantile-guard[plot]   # matplotlib only
-pip install quantile-guard[formula] # patsy only
+pip install quantile-guard[all]      # formula interface + plots
+pip install quantile-guard[plot]     # matplotlib only
+pip install quantile-guard[formula]  # patsy only
 ```
 
 ## Quick Start

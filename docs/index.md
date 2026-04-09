@@ -1,12 +1,35 @@
 # quantile-guard
 
-**Non-crossing quantile models with built-in inference, calibration, and evaluation.**
+**Non-crossing quantile regression with inference, calibration, and evaluation — in one toolkit.**
 
-A quantile modeling toolkit that fits multiple quantiles jointly with monotonicity constraints — guaranteeing predictions never cross. From raw quantile regression through calibrated prediction intervals, with inference, diagnostics, and evaluation built in.
+Fit multiple quantiles jointly with monotonicity constraints that guarantee predictions never cross. Get standard errors, p-values, conformal calibration, and evaluation metrics out of the box. Scikit-learn compatible.
+
+---
+
+## Who Is This For
+
+<div class="grid" markdown>
+
+**Data scientists** building prediction intervals for production systems where crossed quantiles break downstream logic.
+
+**Researchers & econometricians** who need valid statistical inference — SEs, p-values, confidence intervals — on quantile regression coefficients.
+
+**ML engineers** who want a drop-in sklearn-compatible estimator that guarantees monotone quantile predictions.
+
+**Risk analysts & actuaries** modeling conditional tail distributions with censored or survival data.
+
+**Anyone evaluating quantile models** — the metrics and diagnostics modules work with predictions from XGBoost, LightGBM, or any other source.
+
+</div>
+
+---
 
 ## Why This Exists
 
 When you fit quantiles independently (as sklearn and statsmodels do), nothing prevents the 90th percentile prediction from falling below the 10th. This package solves that by fitting all quantiles in a single joint optimization with non-crossing constraints — and wraps the result in a complete modeling workflow.
+
+!!! warning "Crossing is common on real data"
+    At n=500 with 13 quantile levels, **30% of test samples** show crossed predictions when using sklearn or statsmodels. This package produces zero crossings by construction. See [Benchmarks](benchmarks.md) for full results.
 
 ## Workflows
 
@@ -19,30 +42,24 @@ When you fit quantiles independently (as sklearn and statsmodels do), nothing pr
 | **Calibration Diagnostics** | `calibration` | Coverage by group/bin, nominal vs empirical, sharpness |
 | **Crossing Detection & Repair** | `postprocess` | Diagnose and fix crossings from any quantile model |
 
-## Key Differentiators
+??? note "Feature comparison vs sklearn & statsmodels"
 
-| Feature | This package | sklearn | statsmodels |
-|---------|:---:|:---:|:---:|
-| Multiple quantiles (joint fit) | Yes | No | No |
-| Non-crossing guarantee | Yes | No | No |
-| Multi-output regression | Yes | No | No |
-| Analytical / kernel / cluster / bootstrap SEs | Yes | No | Partial |
-| L1 / Elastic Net / SCAD / MCP | Yes | L1 only | No |
-| Conformal calibration (CQR) | Yes | No | No |
-| Calibration diagnostics | Yes | No | No |
-| Evaluation metrics suite | Yes | Partial | No |
-| Crossing detection + fix | Yes | No | No |
-| Censored QR | Yes | No | No |
-| Prediction intervals | Yes | No | No |
-| Pseudo R² | Yes | No | Yes |
-| Formula interface | Yes | No | Yes |
-| Sklearn pipeline compatible | Yes | Yes | No |
-
-## Benchmarked
-
-Tested on heavy-tailed heteroscedastic data. Independent fitters produce 4-30% crossing rates; this package produces zero — while matching or improving pinball loss.
-
-See [Benchmarks](benchmarks.md) for full results and reproduction instructions.
+    | Feature | This package | sklearn | statsmodels |
+    |---------|:---:|:---:|:---:|
+    | Multiple quantiles (joint fit) | Yes | No | No |
+    | Non-crossing guarantee | Yes | No | No |
+    | Multi-output regression | Yes | No | No |
+    | Analytical / kernel / cluster / bootstrap SEs | Yes | No | Partial |
+    | L1 / Elastic Net / SCAD / MCP | Yes | L1 only | No |
+    | Conformal calibration (CQR) | Yes | No | No |
+    | Calibration diagnostics | Yes | No | No |
+    | Evaluation metrics suite | Yes | Partial | No |
+    | Crossing detection + fix | Yes | No | No |
+    | Censored QR | Yes | No | No |
+    | Prediction intervals | Yes | No | No |
+    | Pseudo R-squared | Yes | No | Yes |
+    | Formula interface | Yes | No | Yes |
+    | Sklearn pipeline compatible | Yes | Yes | No |
 
 ## Installation
 
@@ -52,9 +69,20 @@ pip install quantile-guard
 
 With optional extras:
 
-```bash
-pip install quantile-guard[all]  # formulas + plots
-```
+=== "All extras"
+    ```bash
+    pip install quantile-guard[all]
+    ```
+
+=== "Plots only"
+    ```bash
+    pip install quantile-guard[plot]
+    ```
+
+=== "Formulas only"
+    ```bash
+    pip install quantile-guard[formula]
+    ```
 
 ## Quick Example
 
@@ -72,6 +100,13 @@ model.fit(X, y)
 print(model.summary()[0.5]['y'])
 print(model.pseudo_r_squared_)
 ```
+
+## Benchmarked
+
+Tested on heavy-tailed heteroscedastic data. Independent fitters produce 4-30% crossing rates; this package produces zero — while matching or improving pinball loss.
+
+!!! tip "See full results"
+    [Benchmarks](benchmarks.md) includes crossing rates, pinball loss, timing, and coverage across multiple dataset sizes, with reproduction instructions.
 
 ## Next Steps
 
