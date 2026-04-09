@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quantile-guard"
-version = "0.5.1"
-description = "Non-crossing quantile regression toolkit with joint multi-quantile fitting, inference, conformal calibration, and evaluation. Scikit-learn compatible."
+version = "0.5.2"
+description = "The quantile modeling toolkit with non-crossing guarantees. Joint multi-quantile fitting, inference, conformal calibration, and evaluation. Scikit-learn compatible."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Joshua Vernazza" }]

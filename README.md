@@ -14,38 +14,37 @@
 
 # quantile-guard
 
-**Non-crossing quantile regression with inference, calibration, and evaluation — in one toolkit.**
+**The quantile modeling toolkit with non-crossing guarantees.**
 
-Fit multiple quantiles jointly with monotonicity constraints that guarantee predictions never cross. Get standard errors, p-values, conformal calibration, and evaluation metrics out of the box. Scikit-learn compatible.
-
----
-
-## Who Is This For
-
-- **Data scientists** building prediction intervals for production systems where crossed quantiles break downstream logic
-- **Researchers & econometricians** who need valid statistical inference (SEs, p-values, CIs) on quantile regression coefficients
-- **ML engineers** who want a drop-in sklearn-compatible estimator that guarantees monotone quantile predictions
-- **Risk analysts & actuaries** modeling conditional tail distributions with censored or survival data
-- **Anyone evaluating quantile models** — the metrics and diagnostics modules work with predictions from XGBoost, LightGBM, or any other source
+Fit multiple quantiles jointly with monotonicity constraints that guarantee predictions never cross. Built-in inference, conformal calibration, evaluation metrics, and crossing diagnostics. Scikit-learn compatible.
 
 ---
 
 ## Why Not Just Fit Quantiles Independently?
 
-When you fit quantiles one at a time (as sklearn and statsmodels do), nothing prevents the 90th percentile prediction from falling *below* the 10th. On real-world data with heavy tails, noise, or many quantile levels, **this happens frequently**:
+When you fit quantiles one at a time (as sklearn and statsmodels do), nothing prevents the 90th percentile prediction from falling *below* the 10th. On real data with heavy tails or many quantile levels, **this happens frequently**:
 
-| n | features | quantiles | Crossing rate (independent) | Crossing rate (this package) |
+| n | features | quantiles | Crossing rate (independent) | Crossing rate (quantile-guard) |
 |---:|---:|---:|---:|---:|
 | 500 | 10 | 13 | **30.0%** | **0%** |
 | 1,000 | 10 | 13 | **16.5%** | **0%** |
 | 2,000 | 20 | 13 | **11.0%** | **0%** |
-| 2,000 | 20 | 7 | **4.5%** | **0%** |
 
-This package eliminates crossings by construction. The joint formulation also acts as beneficial regularization — achieving **equal or better pinball loss** than independent fitting.
+quantile-guard eliminates crossings by construction — and the joint formulation acts as beneficial regularization, achieving **equal or better pinball loss** than independent fitting.
 
-Full benchmark methodology and results: [Benchmarks](https://joshvern.github.io/quantile_guard/benchmarks/)
+[Full benchmark results](https://joshvern.github.io/quantile_guard/benchmarks/) | [Reproduce locally](https://joshvern.github.io/quantile_guard/benchmarks/#reproducing-these-results)
 
-## What You Get
+## Who Is This For
+
+- **Data scientists** building prediction intervals for production systems where crossed quantiles break downstream logic
+- **Researchers & econometricians** who need valid statistical inference (SEs, p-values, CIs) on quantile regression coefficients
+- **ML engineers** who want a drop-in sklearn-compatible estimator with monotone quantile guarantees
+- **Risk analysts & actuaries** modeling conditional tail distributions with censored or survival data
+- **Anyone evaluating quantile models** — the metrics and diagnostics modules work with predictions from XGBoost, LightGBM, or any other source
+
+## Workflows
+
+This is a toolkit, not a single estimator. It covers the pipeline from raw quantile regression through calibrated prediction intervals:
 
 | Workflow | What it does |
 |----------|-------------|
@@ -59,7 +58,7 @@ Full benchmark methodology and results: [Benchmarks](https://joshvern.github.io/
 <details>
 <summary><strong>Feature comparison vs sklearn & statsmodels</strong></summary>
 
-| Feature | This package | sklearn | statsmodels |
+| Feature | quantile-guard | sklearn | statsmodels |
 |---------|:---:|:---:|:---:|
 | Multiple quantiles (joint fit) | Yes | No | No |
 | Non-crossing guarantee | Yes | No | No |
@@ -91,6 +90,14 @@ pip install quantile-guard[all]      # formula interface + plots
 pip install quantile-guard[plot]     # matplotlib only
 pip install quantile-guard[formula]  # patsy only
 ```
+
+> **Migrating from `quantile-regression-pdlp`?** Just change your install and imports — the API is the same:
+> ```python
+> # before
+> from quantile_regression_pdlp import QuantileRegression
+> # after
+> from quantile_guard import QuantileRegression
+> ```
 
 ## Quick Start
 
@@ -173,24 +180,22 @@ model.fit(X, y, clusters=group_labels)
 
 ## Benchmarks
 
-Tested on heavy-tailed heteroscedastic data (Student-t noise, 10-20 features, up to 13 quantiles):
+Tested on heavy-tailed heteroscedastic data (Student-t noise, 10-20 features, up to 13 quantiles). Independent fitters cross; quantile-guard does not — while matching or improving prediction quality:
 
-| n | features | quantiles | Crossing (this) | Crossing (sklearn) | Pinball (this) | Pinball (sklearn) |
+| n | features | quantiles | Crossing (quantile-guard) | Crossing (sklearn) | Pinball (quantile-guard) | Pinball (sklearn) |
 |---:|---:|---:|---:|---:|---:|---:|
 | 500 | 10 | 7 | **0%** | 11.0% | **0.5148** | 0.5166 |
 | 500 | 10 | 13 | **0%** | 30.0% | **0.5095** | 0.5240 |
 | 1,000 | 10 | 13 | **0%** | 16.5% | **0.5048** | 0.5071 |
 | 2,000 | 20 | 13 | **0%** | 11.0% | **0.5599** | 0.5611 |
 
-The joint formulation also achieves slightly better pinball loss — the non-crossing constraints act as beneficial regularization.
+**Speed tradeoff:** quantile-guard solves a single joint LP with non-crossing constraints, which is slower than fitting each quantile independently. The value is the guarantee and the richer downstream workflows. For single-quantile fits where speed matters most, sklearn or statsmodels may be more appropriate.
 
-**Speed tradeoff:** This package solves a single joint LP with non-crossing constraints, which is slower than fitting each quantile independently. The value is in the guarantee and the richer downstream workflows. For single-quantile fits where speed matters most, sklearn or statsmodels may be more appropriate.
+[Full benchmark results](https://joshvern.github.io/quantile_guard/benchmarks/) | [Reproduce locally](https://joshvern.github.io/quantile_guard/benchmarks/#reproducing-these-results)
 
-Full results: [Benchmarks](https://joshvern.github.io/quantile_guard/benchmarks/) | [Reproduce locally](https://joshvern.github.io/quantile_guard/benchmarks/#reproducing-these-results)
+## When to Use This vs Alternatives
 
-## When to Use This Package
-
-**Use this when you need:**
+**Use quantile-guard when you need:**
 - Multiple quantile predictions that must not cross (production pipelines, interval forecasts)
 - Statistical inference on quantile coefficients (SEs, p-values, confidence intervals)
 - Calibrated prediction intervals (conformal quantile regression)
@@ -206,9 +211,9 @@ Full results: [Benchmarks](https://joshvern.github.io/quantile_guard/benchmarks/
 
 Full docs: [joshvern.github.io/quantile_guard](https://joshvern.github.io/quantile_guard/)
 
-## Implementation
+## Under the Hood
 
-Quantile regression is naturally a linear program. This package solves joint multi-quantile LPs with non-crossing constraints using:
+Quantile regression is naturally a linear program. quantile-guard solves joint multi-quantile LPs with non-crossing constraints using:
 
 - **PDLP** — first-order primal-dual solver (default, from Google OR-Tools)
 - **GLOP** — revised simplex (faster on small/medium problems)
@@ -227,7 +232,7 @@ QuantileRegression(tau=0.5, use_sparse=True)          # scipy sparse
 
 ## Contributing
 
-Contributions welcome! Open an issue or submit a pull request on [GitHub](https://github.com/joshvern/quantile_guard).
+Contributions welcome. Open an issue or pull request on [GitHub](https://github.com/joshvern/quantile_guard).
 
 ## License
 
