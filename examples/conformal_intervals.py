@@ -2,7 +2,7 @@
 Conformalized quantile regression for calibrated prediction intervals.
 
 Compares raw quantile intervals with conformally calibrated intervals,
-showing improved coverage on held-out data.
+showing how calibration changes held-out coverage and width.
 """
 
 import numpy as np

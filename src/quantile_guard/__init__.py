@@ -1,8 +1,9 @@
-# quantile_guard/__init__.py
+"""Public package exports."""
 
+from ._version import __version__
 from .quantile_regression import QuantileRegression, CensoredQuantileRegression
 
-__all__ = ['QuantileRegression', 'CensoredQuantileRegression']
+__all__ = ["__version__", "QuantileRegression", "CensoredQuantileRegression"]
 
 # Submodules available via:
 #   from quantile_guard.metrics import pinball_loss, ...

@@ -22,7 +22,7 @@ from quantile_guard import QuantileRegression
 | `solver_backend` | `str` | `'PDLP'` | LP solver: `'PDLP'` or `'GLOP'`. |
 | `solver_tol` | `float` or `None` | `None` | Solver optimality tolerance. |
 | `solver_time_limit` | `float` or `None` | `None` | Max solver time in seconds. |
-| `enforce_non_crossing_predict` | `bool` | `True` | Isotonic projection on predictions to prevent crossing. |
+| `enforce_non_crossing_predict` | `bool` | `True` | Apply row-wise rearrangement when prediction-time crossings are detected. |
 | `se_method` | `str` | `'bootstrap'` | `'bootstrap'`, `'analytical'` (IID), or `'kernel'` (robust). |
 | `use_sparse` | `bool` | `False` | Use scipy sparse LP solver instead of OR-Tools. |
 

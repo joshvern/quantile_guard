@@ -119,8 +119,15 @@ class ConformalQuantileRegression(BaseEstimator):
 
         # Split into training and calibration sets
         n = X.shape[0]
+        if n < 2:
+            raise ValueError("fit requires at least 2 samples.")
         rng = np.random.RandomState(self.random_state)
         n_cal = max(1, int(n * self.calibration_size))
+        if n_cal >= n:
+            raise ValueError(
+                "calibration_size leaves no samples for fitting; provide more data "
+                "or use a smaller calibration_size."
+            )
         indices = rng.permutation(n)
         cal_idx = indices[:n_cal]
         train_idx = indices[n_cal:]
@@ -155,9 +162,17 @@ class ConformalQuantileRegression(BaseEstimator):
 
             # Nonconformity scores: max(lower - y, y - upper)
             scores = np.maximum(lower_pred - y_col, y_col - upper_pred)
-            self.offset_[output] = float(np.quantile(scores, q_level))
+            self.offset_[output] = float(self._conformal_quantile(scores, q_level))
 
         return self
+
+    @staticmethod
+    def _conformal_quantile(scores, q_level):
+        """Use the conservative order statistic required for split conformal coverage."""
+        try:
+            return np.quantile(scores, q_level, method='higher')
+        except TypeError:
+            return np.quantile(scores, q_level, interpolation='higher')
 
     def predict_interval(self, X):
         """

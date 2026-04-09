@@ -43,6 +43,29 @@ HAS_SKLEARN = _check_optional("sklearn")
 HAS_STATSMODELS = _check_optional("statsmodels")
 
 
+def benchmark_configs():
+    """Return benchmark dataset configurations."""
+    return [
+        {"n": 500, "p": 10, "noise": "heavy"},
+        {"n": 1_000, "p": 10, "noise": "heavy"},
+        {"n": 2_000, "p": 20, "noise": "heavy"},
+        {"n": 5_000, "p": 20, "noise": "heavy"},
+    ]
+
+
+def benchmark_tau_sets():
+    """Return quantile grids used in the benchmark suite."""
+    return [
+        [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95],
+        [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99],
+    ]
+
+
+def _format_values(values):
+    """Format a sorted collection of values for console output."""
+    return ", ".join(f"{value:,}" for value in values)
+
+
 def generate_data(n: int, p: int, seed: int = 42, noise: str = "heavy"):
     """Generate data that stresses quantile estimation.
 
@@ -180,19 +203,8 @@ def run_benchmarks():
     # - Small+many quantiles: crossing advantage most visible
     # - Medium datasets: practical everyday scale
     # - Larger n: shows sparse solver vs baselines at scale
-    configs = [
-        {"n": 500, "p": 10, "noise": "heavy"},
-        {"n": 1_000, "p": 10, "noise": "heavy"},
-        {"n": 2_000, "p": 20, "noise": "heavy"},
-        {"n": 5_000, "p": 20, "noise": "heavy"},
-    ]
-
-    taus_list = [
-        # 7 quantiles — typical use case
-        [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95],
-        # 13 quantiles — dense grid, stress test for crossings
-        [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99],
-    ]
+    configs = benchmark_configs()
+    taus_list = benchmark_tau_sets()
 
     results = []
 
@@ -306,8 +318,15 @@ def main():
     print("=" * 60)
     print(f"  sklearn available: {HAS_SKLEARN}")
     print(f"  statsmodels available: {HAS_STATSMODELS}")
-    print(f"  Configs: 2K-100K samples, 5-100 features")
-    print(f"  Quantile sets: 7 and 13 quantiles")
+    configs = benchmark_configs()
+    tau_sets = benchmark_tau_sets()
+    n_values = sorted({cfg["n"] for cfg in configs})
+    p_values = sorted({cfg["p"] for cfg in configs})
+    train_sizes = sorted({int(0.8 * cfg["n"]) for cfg in configs})
+    test_sizes = sorted({cfg["n"] - int(0.8 * cfg["n"]) for cfg in configs})
+    print(f"  Configs: n={_format_values(n_values)} samples, p={_format_values(p_values)} features")
+    print(f"  Train/Test split: train n={_format_values(train_sizes)}, test n={_format_values(test_sizes)}")
+    print(f"  Quantile sets: {', '.join(str(len(taus)) for taus in tau_sets)} quantiles")
     print(f"  Noise: heavy-tailed heteroscedastic (t(3))")
 
     df = run_benchmarks()

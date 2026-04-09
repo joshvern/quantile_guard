@@ -81,7 +81,7 @@ With optional extras:
     ```
 
 !!! tip "Migrating from `quantile-regression-pdlp`?"
-    The API is the same — just change your install and imports:
+    For the core estimator, the import path changes but the call pattern stays the same:
     ```python
     # before
     from quantile_regression_pdlp import QuantileRegression

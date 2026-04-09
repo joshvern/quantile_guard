@@ -47,8 +47,8 @@ Across:
 After running, results are written to:
 
 ```
-results/
-  raw/linear_baselines.csv       # raw data
+benchmarks/results/
+  raw/linear_baselines.csv       # raw benchmark output
   tables/linear_baselines.md     # markdown summary tables
   figures/                       # PNG charts
     fit_time_vs_n.png
@@ -60,7 +60,7 @@ results/
 
 On heavy-tailed heteroscedastic data:
 - **Zero crossing rate** vs 4-30% for sklearn/statsmodels (crossings worst at small n with many quantiles)
-- **Equal or better pinball loss** — the non-crossing constraints act as beneficial regularization (up to 2.8% improvement at n=500, 13 quantiles)
+- **Comparable or better pinball loss in most settings** — the non-crossing constraints act as beneficial regularization (up to 2.8% improvement at n=500, 13 quantiles)
 - **Single fit call** for all quantiles with joint non-crossing constraints
 - **Slower wall-clock time** — the trade-off for solving a joint LP with non-crossing constraints vs separate small LPs
 

@@ -9,8 +9,7 @@ from scipy import sparse
 from tqdm import tqdm
 from sklearn.base import BaseEstimator, RegressorMixin
 from joblib import Parallel, delayed
-import multiprocessing
-import threading
+import os
 import time
 import warnings
 
@@ -57,7 +56,8 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
         Maximum solver time in seconds.
 
     enforce_non_crossing_predict : bool, default=True
-        Enforce monotonic quantile predictions via isotonic projection.
+        Enforce monotonic quantile predictions via row-wise rearrangement
+        when prediction-time crossings are detected.
 
     se_method : str, default='bootstrap'
         Standard error method: 'bootstrap', 'analytical' (IID), or 'kernel'
@@ -477,38 +477,19 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
 
         # ---- Equality constraints: X @ beta + r_pos - r_neg = y ----
         n_eq = Q * K * n
-        eq_rows, eq_cols, eq_data = [], [], []
+        qk = Q * K
+        identity_qk = sparse.eye(qk, format='csc')
+        identity_n = sparse.eye(n, format='csc')
 
-        for qi, q in enumerate(self.tau):
-            for ki in range(K):
-                row_offset = (qi * K + ki) * n
-                beta_offset = (qi * K + ki) * p
-                rp_offset = n_beta + (qi * K + ki) * n
-                rn_offset = n_beta + n_rpos + (qi * K + ki) * n
+        beta_block = sparse.kron(identity_qk, sparse.csc_matrix(X), format='csc')
+        rpos_block = sparse.kron(identity_qk, identity_n, format='csc')
+        rneg_block = sparse.kron(identity_qk, -identity_n, format='csc')
 
-                rows_block = np.arange(n) + row_offset
-
-                # X @ beta
-                for j in range(p):
-                    eq_rows.append(rows_block)
-                    eq_cols.append(np.full(n, beta_offset + j))
-                    eq_data.append(X[:, j])
-
-                # +r_pos
-                eq_rows.append(rows_block)
-                eq_cols.append(np.arange(rp_offset, rp_offset + n))
-                eq_data.append(np.ones(n))
-
-                # -r_neg
-                eq_rows.append(rows_block)
-                eq_cols.append(np.arange(rn_offset, rn_offset + n))
-                eq_data.append(-np.ones(n))
-
-        eq_rows = np.concatenate(eq_rows)
-        eq_cols = np.concatenate(eq_cols)
-        eq_data = np.concatenate(eq_data)
-        A_eq = sparse.csc_matrix((eq_data, (eq_rows, eq_cols)), shape=(n_eq, n_vars))
-        b_eq = np.concatenate([y[:, ki] for qi in range(Q) for ki in range(K)])
+        eq_blocks = [beta_block, rpos_block, rneg_block]
+        if has_penalty:
+            eq_blocks.append(sparse.csc_matrix((n_eq, n_z)))
+        A_eq = sparse.hstack(eq_blocks, format='csc')
+        b_eq = np.tile(y.T.reshape(-1), Q)
 
         # ---- Inequality constraints ----
         ub_rows, ub_cols, ub_data, b_ub_parts = [], [], [], []
@@ -522,35 +503,46 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
                     z_off = n_beta + n_rpos + n_rneg + (qi * K + ki) * (p - 1)
                     for j in range(p - 1):
                         # beta_{j+1} - z_j <= 0
-                        ub_rows.extend([ub_row, ub_row])
-                        ub_cols.extend([beta_off + j + 1, z_off + j])
-                        ub_data.extend([1.0, -1.0])
+                        ub_rows.append(np.array([ub_row, ub_row], dtype=int))
+                        ub_cols.append(np.array([beta_off + j + 1, z_off + j], dtype=int))
+                        ub_data.append(np.array([1.0, -1.0]))
                         b_ub_parts.append(0.0)
                         ub_row += 1
                         # -beta_{j+1} - z_j <= 0
-                        ub_rows.extend([ub_row, ub_row])
-                        ub_cols.extend([beta_off + j + 1, z_off + j])
-                        ub_data.extend([-1.0, -1.0])
+                        ub_rows.append(np.array([ub_row, ub_row], dtype=int))
+                        ub_cols.append(np.array([beta_off + j + 1, z_off + j], dtype=int))
+                        ub_data.append(np.array([-1.0, -1.0]))
                         b_ub_parts.append(0.0)
                         ub_row += 1
 
         # Non-crossing
+        x_flat = X.reshape(-1)
+        nonzero_mask = x_flat != 0
+        row_pattern = np.repeat(np.arange(n), p)[nonzero_mask]
+        col_pattern = np.tile(np.arange(p), n)[nonzero_mask]
+        data_pattern = x_flat[nonzero_mask]
+
         for ki in range(K):
             for qi in range(Q - 1):
                 beta_lo_off = (qi * K + ki) * p
                 beta_hi_off = ((qi + 1) * K + ki) * p
-                for i in range(n):
-                    for j in range(p):
-                        if X[i, j] != 0:
-                            ub_rows.extend([ub_row, ub_row])
-                            ub_cols.extend([beta_lo_off + j, beta_hi_off + j])
-                            ub_data.extend([X[i, j], -X[i, j]])
-                    b_ub_parts.append(0.0)
-                    ub_row += 1
+                if data_pattern.size:
+                    ub_rows.append(ub_row + row_pattern)
+                    ub_cols.append(beta_lo_off + col_pattern)
+                    ub_data.append(data_pattern)
+
+                    ub_rows.append(ub_row + row_pattern)
+                    ub_cols.append(beta_hi_off + col_pattern)
+                    ub_data.append(-data_pattern)
+                b_ub_parts.extend(np.zeros(n))
+                ub_row += n
 
         if ub_row > 0:
+            ub_row_idx = np.concatenate(ub_rows) if ub_rows else np.array([], dtype=int)
+            ub_col_idx = np.concatenate(ub_cols) if ub_cols else np.array([], dtype=int)
+            ub_values = np.concatenate(ub_data) if ub_data else np.array([], dtype=float)
             A_ub = sparse.csc_matrix(
-                (np.array(ub_data), (np.array(ub_rows), np.array(ub_cols))),
+                (ub_values, (ub_row_idx, ub_col_idx)),
                 shape=(ub_row, n_vars)
             )
             b_ub = np.array(b_ub_parts)
@@ -657,62 +649,38 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
 
     def _compute_bootstrap_se(self, X, y, weights):
         """Bootstrap standard errors with empirical p-values and CIs."""
-        np.random.seed(self.random_state)
         n_samples, n_features_plus_1 = X.shape
         n_outputs = y.shape[1]
-
-        beta_bootstrap = {q: {output: np.zeros((self.n_bootstrap, n_features_plus_1))
-                             for output in self.output_names_} for q in self.tau}
-
-        n_jobs = multiprocessing.cpu_count() if self.n_jobs == -1 else self.n_jobs
-
-        manager = multiprocessing.Manager()
-        counter = manager.Value('i', 0)
-        lock = manager.Lock()
-
-        def bootstrap_task(i):
-            idx = np.random.choice(n_samples, n_samples, replace=True)
-            try:
-                beta_sample, _ = self._solve_lp(
-                    X[idx], y[idx], weights[idx], return_coefficients=True)
-                with lock:
-                    counter.value += 1
-                return beta_sample
-            except Exception:
-                with lock:
-                    counter.value += 1
-                return {q: {k: np.full(n_features_plus_1, np.nan)
-                           for k in range(n_outputs)} for q in self.tau}
-
-        def update_pbar():
-            with tqdm(total=self.n_bootstrap, desc='Bootstrapping') as pbar:
-                prev = 0
-                while True:
-                    with lock:
-                        cur = counter.value
-                    if cur - prev > 0:
-                        pbar.update(cur - prev)
-                        prev = cur
-                    if cur >= self.n_bootstrap:
-                        break
-
-        thread = threading.Thread(target=update_pbar)
-        thread.start()
-
-        results = Parallel(n_jobs=n_jobs)(
-            delayed(bootstrap_task)(i) for i in range(self.n_bootstrap)
+        rng = np.random.default_rng(self.random_state)
+        seeds = rng.integers(
+            np.iinfo(np.uint32).max,
+            size=self.n_bootstrap,
+            dtype=np.uint32,
         )
-        thread.join()
+        n_jobs = os.cpu_count() if self.n_jobs == -1 else self.n_jobs
+        n_jobs = max(int(n_jobs or 1), 1)
 
-        for i, bs in enumerate(results):
-            for q in self.tau:
-                for k, output in enumerate(self.output_names_):
-                    beta_bootstrap[q][output][i, :] = bs[q][k]
+        if n_jobs == 1:
+            results = [
+                self._fit_bootstrap_sample(
+                    X, y, weights, int(seed), n_outputs, n_features_plus_1
+                )
+                for seed in tqdm(seeds, total=self.n_bootstrap, desc='Bootstrapping')
+            ]
+        else:
+            results = Parallel(n_jobs=n_jobs, prefer='threads')(
+                delayed(self._fit_bootstrap_sample)(
+                    X, y, weights, int(seed), n_outputs, n_features_plus_1
+                )
+                for seed in seeds
+            )
 
-        for q in self.tau:
-            for output in self.output_names_:
-                valid = beta_bootstrap[q][output][
-                    ~np.isnan(beta_bootstrap[q][output]).any(axis=1)]
+        beta_bootstrap = np.stack(results, axis=0)
+
+        for qi, q in enumerate(self.tau):
+            for ki, output in enumerate(self.output_names_):
+                samples = beta_bootstrap[:, qi, ki, :]
+                valid = samples[~np.isnan(samples).any(axis=1)]
 
                 if valid.shape[0] == 0:
                     raise RuntimeError(
@@ -740,6 +708,23 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
                     'lower_2.5%': ci_lo, 'upper_97.5%': ci_hi
                 }, index=index)
 
+    def _fit_bootstrap_sample(self, X, y, weights, seed, n_outputs, n_features_plus_1):
+        """Fit a single bootstrap resample and return coefficients as an array."""
+        rng = np.random.default_rng(seed)
+        idx = rng.integers(0, X.shape[0], size=X.shape[0])
+        try:
+            beta_sample, _ = self._solve_lp(
+                X[idx], y[idx], weights[idx], return_coefficients=True
+            )
+        except Exception:
+            return np.full((len(self.tau), n_outputs, n_features_plus_1), np.nan)
+
+        coef_array = np.empty((len(self.tau), n_outputs, n_features_plus_1))
+        for qi, q in enumerate(self.tau):
+            for ki in range(n_outputs):
+                coef_array[qi, ki, :] = beta_sample[q][ki]
+        return coef_array
+
     def _compute_analytical_se(self, X, y, method='analytical'):
         """
         Analytical standard errors using asymptotic sandwich estimator.
@@ -751,14 +736,13 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
             'kernel' for heteroscedasticity-robust (Powell 1991).
         """
         n, p = X.shape
+        XtX = X.T @ X
+        XtX_inv = self._safe_inverse(XtX)
 
         for q in self.tau:
             for ki, output in enumerate(self.output_names_):
                 coef_full = np.concatenate(([self.intercept_[q][output]], self.coef_[q][output]))
                 residuals = y[:, ki] - X @ coef_full
-
-                XtX = X.T @ X
-                XtX_inv = np.linalg.inv(XtX)
 
                 if method == 'analytical':
                     # IID: V = tau*(1-tau) * s^2 * (X'X)^{-1}
@@ -768,12 +752,9 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
                     # Kernel sandwich: V = H^{-1} J H^{-1} / n
                     h = self._hall_sheather_bandwidth(q, n)
                     fhat = norm.pdf(residuals / h) / h
-                    H = X.T @ np.diag(fhat) @ X / n
+                    H = X.T @ (X * fhat[:, None]) / n
                     J = q * (1 - q) * XtX / n
-                    try:
-                        H_inv = np.linalg.inv(H)
-                    except np.linalg.LinAlgError:
-                        H_inv = np.linalg.pinv(H)
+                    H_inv = self._safe_inverse(H)
                     cov = H_inv @ J @ H_inv / n
 
                 stderr = np.sqrt(np.maximum(np.diag(cov), 0))
@@ -802,6 +783,11 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
         n, p = X.shape
         unique_clusters = np.unique(clusters)
         G = len(unique_clusters)
+        if G < 2:
+            raise ValueError("Cluster-robust standard errors require at least 2 clusters.")
+
+        cluster_index = {g: idx for idx, g in enumerate(unique_clusters)}
+        cluster_codes = np.array([cluster_index[g] for g in clusters], dtype=int)
 
         for q in self.tau:
             for ki, output in enumerate(self.output_names_):
@@ -811,19 +797,15 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
                 # Bread: H = (1/n) X' D X where D = diag(f_i(0))
                 h = self._hall_sheather_bandwidth(q, n)
                 fhat = norm.pdf(residuals / h) / h
-                H = X.T @ np.diag(fhat) @ X / n
-                try:
-                    H_inv = np.linalg.inv(H)
-                except np.linalg.LinAlgError:
-                    H_inv = np.linalg.pinv(H)
+                H = X.T @ (X * fhat[:, None]) / n
+                H_inv = self._safe_inverse(H)
 
                 # Meat: J_cluster = (1/n) sum_g (sum_{i in g} psi_i x_i)(sum_{i in g} psi_i x_i)'
                 psi = q - (residuals < 0).astype(float)  # subgradient
-                meat = np.zeros((p, p))
-                for g in unique_clusters:
-                    mask = clusters == g
-                    score_g = X[mask].T @ (psi[mask] * weights[mask])
-                    meat += np.outer(score_g, score_g)
+                score_rows = X * (psi * weights)[:, None]
+                cluster_scores = np.zeros((G, p))
+                np.add.at(cluster_scores, cluster_codes, score_rows)
+                meat = cluster_scores.T @ cluster_scores
                 meat /= n
 
                 # Small-sample correction
@@ -847,6 +829,14 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
                     'lower_2.5%': coef_full - t_crit * stderr,
                     'upper_97.5%': coef_full + t_crit * stderr,
                 }, index=index)
+
+    @staticmethod
+    def _safe_inverse(matrix):
+        """Invert a matrix, falling back to the pseudo-inverse if needed."""
+        try:
+            return np.linalg.inv(matrix)
+        except np.linalg.LinAlgError:
+            return np.linalg.pinv(matrix)
 
     def _estimate_sparsity(self, residuals, tau, n):
         """Estimate sparsity function s(tau) = 1/f(F^{-1}(tau)) via order statistics."""

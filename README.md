@@ -91,7 +91,7 @@ pip install quantile-guard[plot]     # matplotlib only
 pip install quantile-guard[formula]  # patsy only
 ```
 
-> **Migrating from `quantile-regression-pdlp`?** Just change your install and imports — the API is the same:
+> **Migrating from `quantile-regression-pdlp`?** For the core estimator, the import path changes but the call pattern stays the same:
 > ```python
 > # before
 > from quantile_regression_pdlp import QuantileRegression
@@ -132,7 +132,7 @@ cqr = ConformalQuantileRegression(base_estimator=base, coverage=0.90)
 cqr.fit(X_train, y_train)
 
 intervals = cqr.predict_interval(X_test)
-print(cqr.empirical_coverage(X_test, y_test))  # should be >= 0.90
+print(cqr.empirical_coverage(X_test, y_test))  # typically close to the target coverage
 ```
 
 ### Censored Quantile Regression

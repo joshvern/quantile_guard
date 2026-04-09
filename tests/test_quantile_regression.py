@@ -407,3 +407,23 @@ def test_single_feature():
     y_pred = model.predict(X[:3])
     assert y_pred[0.5]['y'].shape == (3,)
     assert abs(model.coef_[0.5]['y'][0] - 2.0) < 0.3
+
+
+def test_sklearn_pipeline_compatibility():
+    """Estimator should fit and predict inside a sklearn Pipeline."""
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    X, y, _ = _make_synthetic_regression(n_samples=80, seed=12)
+    pipe = Pipeline(
+        [
+            ("scale", StandardScaler()),
+            ("qr", QuantileRegression(tau=[0.25, 0.5, 0.75], se_method="analytical")),
+        ]
+    )
+
+    pipe.fit(X, y)
+    pred = pipe.predict(X[:5])
+
+    assert set(pred.keys()) == {0.25, 0.5, 0.75}
+    assert pred[0.5]["y"].shape == (5,)

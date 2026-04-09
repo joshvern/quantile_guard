@@ -16,6 +16,7 @@ Fraction of test samples where at least one quantile prediction violates monoton
 | 1,000 | 10 | 13 | **0%** | 16.5% | 15.0% |
 | 2,000 | 20 | 7 | **0%** | 4.5% | 4.5% |
 | 2,000 | 20 | 13 | **0%** | 11.0% | 11.0% |
+| 5,000 | 20 | 7 | **0%** | 0.0% | 0.0% |
 | 5,000 | 20 | 13 | **0%** | 0.4% | 0.4% |
 
 Crossings are worst when:
@@ -38,6 +39,7 @@ The joint non-crossing formulation matches or slightly improves pinball loss com
 | 1,000 | 10 | 13 | **0.5048** | 0.5071 | 0.5067 |
 | 2,000 | 20 | 7 | **0.5604** | 0.5606 | 0.5606 |
 | 2,000 | 20 | 13 | **0.5599** | 0.5611 | 0.5611 |
+| 5,000 | 20 | 7 | 0.5925 | **0.5925** | **0.5925** |
 | 5,000 | 20 | 13 | **0.5893** | 0.5896 | 0.5896 |
 
 At n=500, 13 quantiles: quantile-guard achieves 0.5095 vs 0.5240 — a **2.8% improvement** from the joint formulation.
@@ -49,12 +51,13 @@ quantile-guard is **slower** on raw wall-clock time. That's the cost of solving 
 | n | p | quantiles | quantile-guard (sparse) | sklearn (sum of fits) | statsmodels (sum of fits) |
 |---:|---:|---:|---:|---:|---:|
 | 500 | 10 | 7 | 0.8s | 0.1s | 0.3s |
-| 500 | 10 | 13 | 2.8s | 0.2s | 0.4s |
+| 500 | 10 | 13 | 3.0s | 0.2s | 0.4s |
 | 1,000 | 10 | 7 | 2.7s | 0.3s | 0.1s |
-| 1,000 | 10 | 13 | 10.3s | 0.6s | 0.3s |
-| 2,000 | 20 | 7 | 19.7s | 1.3s | 0.5s |
-| 2,000 | 20 | 13 | 163.0s | 2.4s | 0.6s |
-| 5,000 | 20 | 7 | 125.1s | 6.7s | 0.5s |
+| 1,000 | 10 | 13 | 10.0s | 0.5s | 0.3s |
+| 2,000 | 20 | 7 | 18.5s | 1.3s | 3.4s |
+| 2,000 | 20 | 13 | 172.3s | 2.4s | 5.4s |
+| 5,000 | 20 | 7 | 124.9s | 7.0s | 4.2s |
+| 5,000 | 20 | 13 | 676.3s | 12.9s | 19.3s |
 
 ### What the extra time buys you
 
@@ -75,12 +78,14 @@ Coverage of the interval formed by the outermost quantile predictions (e.g., [0.
 
 | n | p | quantiles | Nominal | quantile-guard | sklearn | statsmodels |
 |---:|---:|---:|---:|---:|---:|---:|
-| 500 | 10 | 7 | 90% | 88% | 88% | 88% |
-| 500 | 10 | 13 | 98% | 96% | 96% | 96% |
-| 1,000 | 10 | 7 | 90% | 89% | 89% | 89% |
-| 1,000 | 10 | 13 | 98% | 97% | 97% | 97% |
-| 2,000 | 20 | 7 | 90% | 84% | 84% | 84% |
-| 5,000 | 20 | 7 | 90% | 82% | 82% | 82% |
+| 500 | 10 | 7 | 90% | 93.0% | 92.0% | 92.0% |
+| 500 | 10 | 13 | 98% | 97.0% | 94.0% | 94.0% |
+| 1,000 | 10 | 7 | 90% | 89.5% | 89.0% | 88.5% |
+| 1,000 | 10 | 13 | 98% | 98.0% | 95.5% | 95.5% |
+| 2,000 | 20 | 7 | 90% | 89.0% | 88.2% | 88.2% |
+| 2,000 | 20 | 13 | 98% | 95.8% | 93.8% | 93.8% |
+| 5,000 | 20 | 7 | 90% | 89.1% | 89.1% | 89.1% |
+| 5,000 | 20 | 13 | 98% | 97.6% | 97.7% | 97.7% |
 
 For better-calibrated intervals, use [Conformalized Quantile Regression](conformal.md).
 

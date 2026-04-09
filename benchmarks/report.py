@@ -110,55 +110,80 @@ def generate_figures(df: pd.DataFrame, output_dir: Path):
         return
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    quantile_counts = sorted(df["n_taus"].unique())
+
+    def _iter_axes(figsize_scale=6):
+        fig, axes = plt.subplots(
+            1,
+            len(quantile_counts),
+            figsize=(figsize_scale * len(quantile_counts), 5),
+            squeeze=False,
+            sharey=len(quantile_counts) > 1,
+        )
+        return fig, axes.flatten()
 
     # 1. Fit time by dataset size
-    fig, ax = plt.subplots(figsize=(8, 5))
-    for model in df["model"].unique():
-        subset = df[(df["model"] == model) & (df["n_taus"] == 3)]
-        if len(subset) > 0:
+    fig, axes = _iter_axes()
+    for ax, n_taus in zip(axes, quantile_counts):
+        subset_nt = df[df["n_taus"] == n_taus]
+        for model in subset_nt["model"].unique():
+            subset = subset_nt[subset_nt["model"] == model].sort_values("n")
             ax.plot(subset["n"], subset["fit_time_s"], "o-", label=model)
-    ax.set_xlabel("Dataset size (n)")
-    ax.set_ylabel("Fit time (seconds)")
-    ax.set_title("Fit Time vs Dataset Size (3 quantiles)")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+        ax.set_xlabel("Dataset size (n)")
+        ax.set_ylabel("Fit time (seconds)")
+        ax.set_title(f"Fit Time vs Dataset Size ({n_taus} quantiles)")
+        ax.grid(True, alpha=0.3)
+        ax.legend()
     fig.tight_layout()
     fig.savefig(output_dir / "fit_time_vs_n.png", dpi=150)
     plt.close(fig)
 
     # 2. Pinball loss comparison
-    fig, ax = plt.subplots(figsize=(8, 5))
-    for model in df["model"].unique():
-        subset = df[(df["model"] == model) & (df["n_taus"] == 3)]
-        if len(subset) > 0:
+    fig, axes = _iter_axes()
+    for ax, n_taus in zip(axes, quantile_counts):
+        subset_nt = df[df["n_taus"] == n_taus]
+        for model in subset_nt["model"].unique():
+            subset = subset_nt[subset_nt["model"] == model].sort_values("n")
             ax.plot(subset["n"], subset["mean_pinball_loss"], "o-", label=model)
-    ax.set_xlabel("Dataset size (n)")
-    ax.set_ylabel("Mean pinball loss")
-    ax.set_title("Pinball Loss vs Dataset Size (3 quantiles)")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+        ax.set_xlabel("Dataset size (n)")
+        ax.set_ylabel("Mean pinball loss")
+        ax.set_title(f"Pinball Loss vs Dataset Size ({n_taus} quantiles)")
+        ax.grid(True, alpha=0.3)
+        ax.legend()
     fig.tight_layout()
     fig.savefig(output_dir / "pinball_loss_vs_n.png", dpi=150)
     plt.close(fig)
 
     # 3. Crossing rate bar chart
-    fig, ax = plt.subplots(figsize=(8, 5))
-    cross_df = df[df["n_taus"] == 5].copy()
-    if len(cross_df) > 0:
-        models = cross_df["model"].unique()
+    fig, axes = _iter_axes(figsize_scale=7)
+    for ax, n_taus in zip(axes, quantile_counts):
+        cross_df = df[df["n_taus"] == n_taus].copy()
+        if len(cross_df) == 0:
+            continue
+
+        models = list(cross_df["model"].unique())
         sizes = sorted(cross_df["n"].unique())
         x = np.arange(len(sizes))
-        width = 0.25
+        width = 0.8 / max(len(models), 1)
+
         for i, model in enumerate(models):
-            subset = cross_df[cross_df["model"] == model].sort_values("n")
-            ax.bar(x + i * width, subset["crossing_rate"], width, label=model)
+            subset = cross_df[cross_df["model"] == model]
+            heights = [
+                subset.loc[subset["n"] == size, "crossing_rate"].iloc[0]
+                if np.any(subset["n"] == size)
+                else np.nan
+                for size in sizes
+            ]
+            offset = (i - (len(models) - 1) / 2) * width
+            ax.bar(x + offset, heights, width, label=model)
+
         ax.set_xlabel("Dataset size (n)")
         ax.set_ylabel("Crossing rate")
-        ax.set_title("Crossing Rate by Model (5 quantiles)")
-        ax.set_xticks(x + width)
+        ax.set_title(f"Crossing Rate by Model ({n_taus} quantiles)")
+        ax.set_xticks(x)
         ax.set_xticklabels(sizes)
-        ax.legend()
         ax.grid(True, alpha=0.3, axis="y")
+        ax.legend()
     fig.tight_layout()
     fig.savefig(output_dir / "crossing_rate.png", dpi=150)
     plt.close(fig)

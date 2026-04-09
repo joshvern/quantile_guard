@@ -17,7 +17,7 @@ Regression." NeurIPS 2019.
 3. **Compute nonconformity scores** on the calibration set:
    `score_i = max(lower_i - y_i, y_i - upper_i)`
 4. **Find the calibration quantile** of the scores at level `ceil((1-α)(n+1))/n`
-5. **Expand intervals** by adding/subtracting this offset at prediction time
+5. **Adjust intervals** by adding/subtracting this offset at prediction time
 
 The result: prediction intervals that contain at least `1-α` fraction of
 future observations in expectation.
@@ -52,7 +52,7 @@ print(intervals['y']['width'][:5])
 ```python
 # Check actual coverage on held-out data
 coverage = cqr.empirical_coverage(X_test, y_test)
-print(f"Empirical coverage: {coverage['y']:.3f}")  # should be ≥ 0.90
+print(f"Empirical coverage: {coverage['y']:.3f}")  # typically close to the target coverage
 
 # Mean interval width
 width = cqr.interval_width(X_test)
@@ -72,11 +72,11 @@ print(f"Mean width: {width['y']:.3f}")
 
 The base model's extreme quantiles should bracket the desired coverage. For
 90% coverage, `tau=[0.05, 0.95]` is natural. The conformal offset then adjusts
-these bounds to hit the target coverage.
+these bounds toward the target coverage.
 
 Using more extreme base quantiles (e.g., `tau=[0.01, 0.99]` for 90% coverage)
-gives conformal more room to shrink intervals, potentially producing tighter
-bounds. Using less extreme quantiles forces conformal to expand more.
+gives conformal more room to shrink intervals when the base model is conservative.
+Using less extreme quantiles makes conformal add a larger positive offset.
 
 ## Caveats
 

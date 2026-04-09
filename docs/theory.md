@@ -32,8 +32,8 @@ $$
 x_i^\top \beta_{\tau_j} \leq x_i^\top \beta_{\tau_{j+1}}, \quad \forall\, i,\; j = 1, \ldots, K{-}1
 $$
 
-At prediction time, an isotonic regression projection is applied as a fallback
-to enforce monotonicity on new data points.
+At prediction time, a row-wise rearrangement fallback is applied only when
+needed to enforce monotonicity on new data points.
 
 ## Solvers
 

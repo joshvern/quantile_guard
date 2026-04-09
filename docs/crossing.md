@@ -12,7 +12,7 @@ violates the definition of quantiles and produces nonsensical intervals.
 
 1. **LP constraints** during fitting enforce `Q(tau_j) <= Q(tau_{j+1})` on
    training data
-2. **Isotonic projection** at prediction time fixes any remaining violations
+2. **Row-wise rearrangement** at prediction time fixes any remaining violations
    on new data
 
 If you're using external models (LightGBM, XGBoost, etc.) that don't enforce

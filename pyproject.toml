@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quantile-guard"
-version = "0.6.1"
+dynamic = ["version"]
 description = "The quantile modeling toolkit with non-crossing guarantees. Joint multi-quantile fitting, inference, conformal calibration, and evaluation. Scikit-learn compatible."
 readme = "README.md"
 license = { text = "MIT" }
@@ -61,6 +61,9 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "quantile_guard._version.__version__" }
 
 [tool.pytest.ini_options]
 addopts = "-q --ignore=tests/bench_vs_sklearn.py --ignore=tests/bench_vs_r.py"
