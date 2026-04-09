@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quantile-guard"
-version = "0.6.0"
+version = "0.6.1"
 description = "The quantile modeling toolkit with non-crossing guarantees. Joint multi-quantile fitting, inference, conformal calibration, and evaluation. Scikit-learn compatible."
 readme = "README.md"
 license = { text = "MIT" }
