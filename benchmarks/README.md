@@ -28,9 +28,10 @@ Compares this package against:
 | **statsmodels** | `QuantReg` | Per-quantile fitting, interior point |
 
 Across:
-- Dataset sizes: 500, 2000, 5000 samples
-- Feature counts: 3, 5, 10
-- Quantile sets: `[0.1, 0.5, 0.9]` and `[0.05, 0.25, 0.5, 0.75, 0.95]`
+- Dataset sizes: 500, 1000, 2000, 5000 samples
+- Feature counts: 10, 20
+- Quantile sets: 7 quantiles `[0.05, ..., 0.95]` and 13 quantiles `[0.01, ..., 0.99]`
+- Noise: heavy-tailed heteroscedastic (Student-t, df=3)
 
 ### Metrics
 
@@ -57,10 +58,11 @@ results/
 
 ## Key Findings
 
-This package achieves:
-- **Equivalent pinball loss** to sklearn and statsmodels (same underlying LP)
-- **Zero crossing rate** due to joint non-crossing constraints (sklearn/statsmodels fit quantiles independently and can cross)
-- **Single fit call** for all quantiles (sklearn/statsmodels require one fit per quantile)
+On heavy-tailed heteroscedastic data:
+- **Zero crossing rate** vs 4-30% for sklearn/statsmodels (crossings worst at small n with many quantiles)
+- **Equal or better pinball loss** — the non-crossing constraints act as beneficial regularization (up to 2.8% improvement at n=500, 13 quantiles)
+- **Single fit call** for all quantiles with joint non-crossing constraints
+- **Slower wall-clock time** — the trade-off for solving a joint LP with non-crossing constraints vs separate small LPs
 
 ## Reproducing
 

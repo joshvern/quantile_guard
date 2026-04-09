@@ -164,18 +164,20 @@ QuantileRegression(tau=0.5, solver_tol=1e-8, solver_time_limit=60.0)
 
 ## Benchmarks
 
-Validated against sklearn `QuantileRegressor` and statsmodels `QuantReg` across multiple dataset sizes and quantile configurations. All three solve the same LP, so pinball loss is equivalent — the difference is in what this package provides *around* the fit.
+Tested on heavy-tailed heteroscedastic data (Student-t noise, 10-20 features, up to 13 quantiles). The key advantage: **zero quantile crossings** where independent fitters produce 4-30% crossing rates.
 
-| n | quantiles | Pinball loss (all equal) | Crossing rate | This package extras |
-|---:|---:|---:|---:|---|
-| 500 | 3 | 0.2291 | 0% (all) | Joint fit, non-crossing guarantee, SEs, CQR |
-| 2000 | 5 | 0.2238 | 0% (all) | + evaluation metrics, crossing tools |
-| 5000 | 5 | 0.2347 | 0% (all) | + censored QR, SCAD/MCP/elastic net |
+| n | features | quantiles | Crossing rate (this) | Crossing rate (sklearn) | Pinball loss (this) | Pinball loss (sklearn) |
+|---:|---:|---:|---:|---:|---:|---:|
+| 500 | 10 | 7 | **0%** | 11.0% | **0.5148** | 0.5166 |
+| 500 | 10 | 13 | **0%** | 30.0% | **0.5095** | 0.5240 |
+| 1,000 | 10 | 13 | **0%** | 16.5% | **0.5048** | 0.5071 |
+| 2,000 | 20 | 13 | **0%** | 11.0% | **0.5599** | 0.5611 |
 
-Full benchmark results, methodology, and reproduction instructions: [Benchmarks docs](https://joshvern.github.io/quantile_regression_pdlp/benchmarks/)
+The joint non-crossing formulation also achieves slightly better pinball loss as the constraints act as beneficial regularization.
+
+Full results and methodology: [Benchmarks](https://joshvern.github.io/quantile_regression_pdlp/benchmarks/)
 
 ```bash
-# Reproduce benchmarks locally
 pip install -e ".[benchmark]"
 python benchmarks/run_linear_baselines.py
 python benchmarks/report.py
