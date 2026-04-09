@@ -1,5 +1,5 @@
 site_name: quantile-regression-pdlp
-site_description: Optimization-based quantile regression using Google OR-Tools PDLP.
+site_description: Non-crossing quantile models with built-in inference, calibration, and evaluation.
 site_url: https://joshvern.github.io/quantile_regression_pdlp/
 repo_url: https://github.com/joshvern/quantile_regression_pdlp
 repo_name: joshvern/quantile_regression_pdlp
@@ -13,13 +13,14 @@ theme:
 
 nav:
   - Home: index.md
-  - Usage: usage.md
-  - Evaluation: evaluation.md
-  - Crossing: crossing.md
-  - Conformal: conformal.md
-  - Calibration: calibration.md
+  - Usage Guide: usage.md
+  - Workflows:
+    - Evaluation: evaluation.md
+    - Crossing: crossing.md
+    - Conformal: conformal.md
+    - Calibration: calibration.md
   - Benchmarks: benchmarks.md
-  - API: api.md
+  - API Reference: api.md
   - Theory: theory.md
 
 markdown_extensions:

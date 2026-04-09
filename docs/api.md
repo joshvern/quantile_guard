@@ -1,6 +1,8 @@
 # API Reference
 
-## `QuantileRegression`
+## Joint Quantile Regression
+
+### `QuantileRegression`
 
 ```python
 from quantile_regression_pdlp import QuantileRegression
@@ -88,7 +90,9 @@ Returns a matplotlib `Figure`.
 
 ---
 
-## `CensoredQuantileRegression`
+## Censored Quantile Regression
+
+### `CensoredQuantileRegression`
 
 ```python
 from quantile_regression_pdlp import CensoredQuantileRegression
@@ -115,7 +119,9 @@ All `QuantileRegression` parameters are also accepted.
 
 ---
 
-## `ConformalQuantileRegression`
+## Conformalized Quantile Regression
+
+### `ConformalQuantileRegression`
 
 ```python
 from quantile_regression_pdlp.conformal import ConformalQuantileRegression
@@ -162,9 +168,9 @@ Returns `dict[str, float]` -- mean interval width per output.
 
 ---
 
-## `quantile_regression_pdlp.metrics`
+## Evaluation & Metrics
 
-Standalone evaluation functions for quantile predictions from any model.
+Standalone evaluation functions that work with predictions from **any** quantile model — not just this package.
 
 ```python
 from quantile_regression_pdlp.metrics import (
@@ -192,9 +198,9 @@ from quantile_regression_pdlp.metrics import (
 
 ---
 
-## `quantile_regression_pdlp.postprocess`
+## Crossing Detection & Repair
 
-Crossing detection and rearrangement for quantile predictions.
+Diagnose and fix quantile crossings from any model's predictions.
 
 ```python
 from quantile_regression_pdlp.postprocess import (

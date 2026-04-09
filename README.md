@@ -14,41 +14,57 @@
 
 # quantile-regression-pdlp
 
-Optimization-based quantile regression built on Google OR-Tools. Scikit-learn API, statsmodels-style summaries, and features that go beyond what either package offers.
+**Non-crossing quantile models with built-in inference, calibration, and evaluation.**
 
-**What makes this different from sklearn or statsmodels?**
+A quantile modeling toolkit — not just a quantile regressor. Fits multiple quantiles jointly with monotonicity constraints that guarantee predictions never cross. Wraps the result in inference, conformal calibration, evaluation metrics, and crossing diagnostics.
 
-- Fits **multiple quantiles jointly** with non-crossing constraints
-- **Multi-output** regression in a single model
-- **SCAD, MCP, and elastic net** penalties (not just L1)
-- **Analytical, bootstrap, kernel, and cluster-robust** standard errors
-- **Conformalized quantile regression** for calibrated prediction intervals
-- **Evaluation metrics**: pinball loss, coverage, interval score, crossing diagnostics
-- **Calibration diagnostics**: coverage by group/bin, nominal vs empirical, sharpness analysis
-- **Crossing detection and rearrangement** for any quantile model's predictions
-- **Prediction intervals**, quantile process plots, and pseudo R²
-- **Censored quantile regression** for survival data
-- Scipy sparse solver for **large-scale** problems
-- Validated against sklearn, statsmodels, and R's `quantreg`
+Scikit-learn compatible. Validated against sklearn, statsmodels, and R's `quantreg`.
+
+## Why Not Just Fit Quantiles Independently?
+
+When you fit quantiles one at a time (as sklearn and statsmodels do), nothing prevents the 90th percentile prediction from falling *below* the 10th. On real-world data with heavy tails, noise, or many quantile levels, **this happens frequently**:
+
+| n | features | quantiles | Crossing rate (independent) | Crossing rate (this package) |
+|---:|---:|---:|---:|---:|
+| 500 | 10 | 13 | **30.0%** | **0%** |
+| 1,000 | 10 | 13 | **16.5%** | **0%** |
+| 2,000 | 20 | 13 | **11.0%** | **0%** |
+| 2,000 | 20 | 7 | **4.5%** | **0%** |
+
+This package eliminates crossings by construction. The joint formulation also acts as beneficial regularization — achieving **equal or better pinball loss** than independent fitting.
+
+Full benchmark methodology and results: [Benchmarks](https://joshvern.github.io/quantile_regression_pdlp/benchmarks/)
+
+## What You Get
+
+This is a **toolkit**, not a single estimator. It covers the workflow from raw quantile regression through calibrated prediction intervals:
+
+| Workflow | What it does |
+|----------|-------------|
+| **Joint Quantile Regression** | Fit multiple quantiles in one call with non-crossing guarantees |
+| **Conformalized Quantile Regression** | Calibrate intervals for finite-sample coverage guarantees |
+| **Censored Quantile Regression** | Handle right- or left-censored (survival) data |
+| **Evaluation & Metrics** | Pinball loss, coverage, interval score, crossing diagnostics |
+| **Calibration Diagnostics** | Coverage by group/bin, nominal vs empirical, sharpness analysis |
+| **Crossing Detection & Repair** | Diagnose and fix crossings from any quantile model |
+
+### Feature Comparison
 
 | Feature | This package | sklearn | statsmodels |
 |---------|:---:|:---:|:---:|
-| Multiple quantiles (joint) | Yes | No | No |
-| Non-crossing constraints | Yes | No | No |
-| Multi-output | Yes | No | No |
-| Analytical SEs | Yes | No | Yes |
-| Kernel (robust) SEs | Yes | No | Yes |
-| Cluster-robust SEs | Yes | No | No |
-| Bootstrap SEs | Yes | No | No |
+| Multiple quantiles (joint fit) | Yes | No | No |
+| Non-crossing guarantee | Yes | No | No |
+| Multi-output regression | Yes | No | No |
+| Analytical / kernel / cluster / bootstrap SEs | Yes | No | Partial |
 | L1 / Elastic Net / SCAD / MCP | Yes | L1 only | No |
 | Conformal calibration (CQR) | Yes | No | No |
+| Calibration diagnostics | Yes | No | No |
 | Evaluation metrics suite | Yes | Partial | No |
 | Crossing detection + fix | Yes | No | No |
-| Calibration diagnostics | Yes | No | No |
+| Censored QR | Yes | No | No |
 | Prediction intervals | Yes | No | No |
 | Pseudo R² | Yes | No | Yes |
 | Formula interface | Yes | No | Yes |
-| Censored QR | Yes | No | No |
 | Sklearn pipeline compatible | Yes | Yes | No |
 
 ## Installation
@@ -74,73 +90,36 @@ from quantile_regression_pdlp import QuantileRegression
 X = np.random.default_rng(0).normal(size=(200, 3))
 y = X @ [2.0, -1.5, 0.8] + np.random.default_rng(1).normal(scale=0.5, size=200)
 
-model = QuantileRegression(tau=[0.1, 0.5, 0.9], n_bootstrap=200, random_state=0)
+# Fit 3 quantiles jointly — guaranteed non-crossing
+model = QuantileRegression(tau=[0.1, 0.5, 0.9], se_method='analytical')
 model.fit(X, y)
 
 # Summaries with coefficients, SEs, p-values, and 95% CIs
 print(model.summary()[0.5]['y'])
 
-# Prediction intervals
+# Prediction intervals (guaranteed monotone: lower < median < upper)
 interval = model.predict_interval(X[:5], coverage=0.80)
 print(interval['y']['lower'], interval['y']['upper'])
-
-# Pseudo R²
-print(model.pseudo_r_squared_)
 ```
 
-## Features at a Glance
+### Conformal Calibration
 
-### Regularization
-
-```python
-# L1 (Lasso)
-QuantileRegression(tau=0.5, regularization='l1', alpha=0.1)
-
-# Elastic net
-QuantileRegression(tau=0.5, regularization='elasticnet', alpha=0.1, l1_ratio=0.5)
-
-# SCAD (less bias on large coefficients)
-QuantileRegression(tau=0.5, regularization='scad', alpha=0.3)
-
-# MCP
-QuantileRegression(tau=0.5, regularization='mcp', alpha=0.3)
-```
-
-### Inference Options
+Turn raw quantile predictions into intervals with coverage guarantees:
 
 ```python
-# Fast analytical SEs (no bootstrapping needed)
-model = QuantileRegression(tau=0.5, se_method='analytical')
-model.fit(X, y)
+from quantile_regression_pdlp.conformal import ConformalQuantileRegression
 
-# Heteroscedasticity-robust kernel sandwich SEs
-model = QuantileRegression(tau=0.5, se_method='kernel')
-model.fit(X, y)
+base = QuantileRegression(tau=[0.05, 0.5, 0.95], se_method='analytical')
+cqr = ConformalQuantileRegression(base_estimator=base, coverage=0.90)
+cqr.fit(X_train, y_train)
 
-# Cluster-robust SEs
-model = QuantileRegression(tau=0.5, se_method='analytical')
-model.fit(X, y, clusters=group_labels)
-```
-
-### Quantile Process Plot
-
-```python
-model = QuantileRegression(
-    tau=[0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95],
-    se_method='analytical'
-)
-model.fit(X, y)
-model.plot_quantile_process(feature='X1')
-```
-
-### Formula Interface
-
-```python
-model = QuantileRegression(tau=0.5, se_method='analytical')
-model.fit_formula('y ~ x1 + x2 + C(region)', data=df)
+intervals = cqr.predict_interval(X_test)
+print(cqr.empirical_coverage(X_test, y_test))  # should be >= 0.90
 ```
 
 ### Censored Quantile Regression
+
+For survival data with right- or left-censoring:
 
 ```python
 from quantile_regression_pdlp import CensoredQuantileRegression
@@ -149,53 +128,91 @@ model = CensoredQuantileRegression(tau=0.5, censoring='right', se_method='analyt
 model.fit(X, observed_time, event_indicator=delta)
 ```
 
-### Solver Options
+### Evaluate Any Quantile Model
+
+The metrics and diagnostics modules work with predictions from any source — not just this package:
 
 ```python
-# GLOP simplex (faster on small/medium problems)
-QuantileRegression(tau=0.5, solver_backend='GLOP')
+from quantile_regression_pdlp.metrics import quantile_evaluation_report
+from quantile_regression_pdlp.postprocess import crossing_summary
 
-# Scipy sparse solver (memory-efficient for large datasets)
-QuantileRegression(tau=0.5, use_sparse=True)
+# Evaluate predictions from XGBoost, LightGBM, or any other model
+report = quantile_evaluation_report(y_true, predictions, taus)
+crossings = crossing_summary(predictions, taus)
+```
 
-# Solver tuning
-QuantileRegression(tau=0.5, solver_tol=1e-8, solver_time_limit=60.0)
+### Regularization
+
+```python
+QuantileRegression(tau=0.5, regularization='l1', alpha=0.1)       # Lasso
+QuantileRegression(tau=0.5, regularization='elasticnet', alpha=0.1, l1_ratio=0.5)
+QuantileRegression(tau=0.5, regularization='scad', alpha=0.3)     # Less bias on large coefficients
+QuantileRegression(tau=0.5, regularization='mcp', alpha=0.3)
+```
+
+### Inference Options
+
+```python
+QuantileRegression(tau=0.5, se_method='analytical')   # Fast asymptotic SEs
+QuantileRegression(tau=0.5, se_method='kernel')        # Heteroscedasticity-robust
+QuantileRegression(tau=0.5, se_method='bootstrap', n_bootstrap=500)
+# Cluster-robust SEs
+model.fit(X, y, clusters=group_labels)
 ```
 
 ## Benchmarks
 
-Tested on heavy-tailed heteroscedastic data (Student-t noise, 10-20 features, up to 13 quantiles). The key advantage: **zero quantile crossings** where independent fitters produce 4-30% crossing rates.
+Tested on heavy-tailed heteroscedastic data (Student-t noise, 10-20 features, up to 13 quantiles):
 
-| n | features | quantiles | Crossing rate (this) | Crossing rate (sklearn) | Pinball loss (this) | Pinball loss (sklearn) |
+| n | features | quantiles | Crossing (this) | Crossing (sklearn) | Pinball (this) | Pinball (sklearn) |
 |---:|---:|---:|---:|---:|---:|---:|
 | 500 | 10 | 7 | **0%** | 11.0% | **0.5148** | 0.5166 |
 | 500 | 10 | 13 | **0%** | 30.0% | **0.5095** | 0.5240 |
 | 1,000 | 10 | 13 | **0%** | 16.5% | **0.5048** | 0.5071 |
 | 2,000 | 20 | 13 | **0%** | 11.0% | **0.5599** | 0.5611 |
 
-The joint non-crossing formulation also achieves slightly better pinball loss as the constraints act as beneficial regularization.
+The joint formulation also achieves slightly better pinball loss — the non-crossing constraints act as beneficial regularization.
 
-Full results and methodology: [Benchmarks](https://joshvern.github.io/quantile_regression_pdlp/benchmarks/)
+**Speed tradeoff:** This package solves a single joint LP with non-crossing constraints, which is slower than fitting each quantile independently. The value is in the guarantee and the richer downstream workflows. For single-quantile fits where speed matters most, sklearn or statsmodels may be more appropriate.
 
-```bash
-pip install -e ".[benchmark]"
-python benchmarks/run_linear_baselines.py
-python benchmarks/report.py
-```
+Full results: [Benchmarks](https://joshvern.github.io/quantile_regression_pdlp/benchmarks/) | [Reproduce locally](https://joshvern.github.io/quantile_regression_pdlp/benchmarks/#reproducing-these-results)
+
+## When to Use This Package
+
+**Use this when you need:**
+- Multiple quantile predictions that must not cross (production pipelines, interval forecasts)
+- Statistical inference on quantile coefficients (SEs, p-values, confidence intervals)
+- Calibrated prediction intervals (conformal quantile regression)
+- Censored/survival quantile models
+- A complete evaluation workflow for any quantile model's predictions
+
+**Use sklearn or statsmodels when:**
+- You only need a single quantile (e.g., median regression)
+- Raw speed matters more than crossing guarantees
+- You don't need inference, calibration, or evaluation tooling
 
 ## Documentation
 
 Full docs: [joshvern.github.io/quantile_regression_pdlp](https://joshvern.github.io/quantile_regression_pdlp/)
 
-## Why PDLP?
+## Implementation
 
-Quantile regression is naturally a linear program. OR-Tools' PDLP is a first-order solver designed for large-scale LPs, making it efficient for high-dimensional problems. For smaller problems, the package also supports GLOP (simplex) and scipy's HiGHS solver.
+Quantile regression is naturally a linear program. This package solves joint multi-quantile LPs with non-crossing constraints using:
+
+- **PDLP** — first-order primal-dual solver (default, from Google OR-Tools)
+- **GLOP** — revised simplex (faster on small/medium problems)
+- **HiGHS** — via scipy's sparse LP interface (memory-efficient)
+
+```python
+QuantileRegression(tau=0.5, solver_backend='GLOP')   # simplex
+QuantileRegression(tau=0.5, use_sparse=True)          # scipy sparse
+```
 
 ## Dependencies
 
-**Required:** ortools, numpy, pandas, scipy, tqdm, joblib, scikit-learn
+**Required:** numpy, pandas, scipy, scikit-learn, ortools, tqdm, joblib
 
-**Optional:** matplotlib (plots), patsy (formulas)
+**Optional:** matplotlib (plots), patsy (formulas), statsmodels (benchmarks)
 
 ## Contributing
 

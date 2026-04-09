@@ -1,10 +1,12 @@
 # Benchmarks
 
-Reproducible comparisons of `quantile_regression_pdlp` against sklearn and statsmodels on challenging data: heavy-tailed heteroscedastic noise (Student-t with 3 degrees of freedom), 10-20 features, and up to 13 quantile levels.
+## Zero Crossings, Even on Hard Data
 
-## The Key Result: Non-Crossing Guarantee
+The central promise of this package: quantile predictions that never cross, by construction. These benchmarks demonstrate that promise on deliberately challenging data — and show that the non-crossing constraint also acts as beneficial regularization, improving prediction quality.
 
-When quantiles are fitted independently (as sklearn and statsmodels do), predictions can **cross** — the 90th percentile prediction falls below the 10th. This package fits all quantiles jointly with non-crossing constraints, eliminating crossings by construction.
+**Test conditions:** heavy-tailed heteroscedastic noise (Student-t, df=3), 10-20 features, up to 13 quantile levels. This is data designed to stress quantile estimators — in practice, your data may be gentler, but the guarantee still matters for production pipelines.
+
+**What's compared:** this package (joint multi-quantile LP with non-crossing constraints) vs sklearn `QuantileRegressor` and statsmodels `QuantReg` (both fit each quantile independently).
 
 ### Crossing Rate (fraction of test samples with at least one violation)
 
@@ -42,9 +44,9 @@ The joint non-crossing formulation achieves equal or slightly better pinball los
 
 At n=500, 13 quantiles: this package achieves 0.5095 vs 0.5240 — a **2.8% improvement** from the joint formulation.
 
-## Fit Time
+## The Speed Tradeoff (Honest)
 
-This package solves a single joint LP with non-crossing constraints — a larger optimization problem than 7 or 13 separate small LPs. This means it is **slower on raw wall-clock time**, but the single call provides non-crossing guarantees, joint inference, and all quantiles at once.
+This package is **slower** on raw wall-clock time. That's the tradeoff for solving a single joint LP with non-crossing constraints, rather than 7 or 13 separate small LPs.
 
 | n | p | quantiles | This package (sparse) | sklearn (sum of fits) | statsmodels (sum of fits) |
 |---:|---:|---:|---:|---:|---:|
@@ -56,13 +58,20 @@ This package solves a single joint LP with non-crossing constraints — a larger
 | 2,000 | 20 | 13 | 163.0s | 2.4s | 0.6s |
 | 5,000 | 20 | 7 | 125.1s | 6.7s | 0.5s |
 
-!!! note "When speed matters most"
-    If you need only a single quantile with no crossing constraints, sklearn
-    or statsmodels will be faster. This package's value is in the **joint
-    multi-quantile fit** with guarantees — plus the inference, calibration,
-    and evaluation tools built around it.
+### Why the tradeoff is worth it
 
+The extra time buys you:
+
+- **Zero crossings** — no post-hoc fixes, no downstream pipeline failures
+- **Joint estimation** — all quantiles fitted together, sharing information
+- **Better pinball loss** — the non-crossing constraints regularize beneficially
+- **One fit call** — inference, intervals, and diagnostics all come from the same model
+
+If you need only a single quantile with no crossing constraints, sklearn or statsmodels will be faster. This package's value is in the joint multi-quantile fit with guarantees — and the inference, calibration, and evaluation tools built around it.
+
+!!! tip "Speeding things up"
     For smaller problems, use `solver_backend='GLOP'` for the simplex solver.
+    For memory-constrained settings, use `use_sparse=True`.
 
 ## Empirical Coverage
 
@@ -89,7 +98,7 @@ All benchmarks use synthetic data with:
 
 This is deliberately challenging data. On well-behaved Gaussian data, crossing rates would be lower — but the guarantee still matters for production pipelines.
 
-## What This Package Adds Beyond The LP
+## Beyond Accuracy: The Full Toolkit
 
 | Feature | This package | sklearn | statsmodels |
 |---------|:---:|:---:|:---:|
