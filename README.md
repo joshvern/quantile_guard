@@ -3,16 +3,16 @@
 [![CI][ci-badge]][ci-link]
 [![Docs][docs-badge]][docs-link]
 
-[pypi-badge]: https://img.shields.io/pypi/v/quantile-regression-pdlp.svg
-[py-badge]: https://img.shields.io/pypi/pyversions/quantile-regression-pdlp.svg
-[ci-badge]: https://github.com/joshvern/quantile_regression_pdlp/actions/workflows/ci.yml/badge.svg
-[docs-badge]: https://github.com/joshvern/quantile_regression_pdlp/actions/workflows/docs.yml/badge.svg
+[pypi-badge]: https://img.shields.io/pypi/v/quantile-guard.svg
+[py-badge]: https://img.shields.io/pypi/pyversions/quantile-guard.svg
+[ci-badge]: https://github.com/joshvern/quantile-guard/actions/workflows/ci.yml/badge.svg
+[docs-badge]: https://github.com/joshvern/quantile-guard/actions/workflows/docs.yml/badge.svg
 
-[pypi-link]: https://pypi.org/project/quantile-regression-pdlp/
-[ci-link]: https://github.com/joshvern/quantile_regression_pdlp/actions/workflows/ci.yml
-[docs-link]: https://joshvern.github.io/quantile_regression_pdlp/
+[pypi-link]: https://pypi.org/project/quantile-guard/
+[ci-link]: https://github.com/joshvern/quantile-guard/actions/workflows/ci.yml
+[docs-link]: https://joshvern.github.io/quantile-guard/
 
-# quantile-regression-pdlp
+# quantile-guard
 
 **Non-crossing quantile models with built-in inference, calibration, and evaluation.**
 
@@ -33,7 +33,7 @@ When you fit quantiles one at a time (as sklearn and statsmodels do), nothing pr
 
 This package eliminates crossings by construction. The joint formulation also acts as beneficial regularization — achieving **equal or better pinball loss** than independent fitting.
 
-Full benchmark methodology and results: [Benchmarks](https://joshvern.github.io/quantile_regression_pdlp/benchmarks/)
+Full benchmark methodology and results: [Benchmarks](https://joshvern.github.io/quantile_guard/benchmarks/)
 
 ## What You Get
 
@@ -70,22 +70,22 @@ This is a **toolkit**, not a single estimator. It covers the workflow from raw q
 ## Installation
 
 ```bash
-pip install quantile-regression-pdlp
+pip install quantile-guard
 ```
 
 Optional extras:
 
 ```bash
-pip install quantile-regression-pdlp[all]   # formula interface + plots
-pip install quantile-regression-pdlp[plot]   # matplotlib only
-pip install quantile-regression-pdlp[formula] # patsy only
+pip install quantile-guard[all]   # formula interface + plots
+pip install quantile-guard[plot]   # matplotlib only
+pip install quantile-guard[formula] # patsy only
 ```
 
 ## Quick Start
 
 ```python
 import numpy as np
-from quantile_regression_pdlp import QuantileRegression
+from quantile_guard import QuantileRegression
 
 X = np.random.default_rng(0).normal(size=(200, 3))
 y = X @ [2.0, -1.5, 0.8] + np.random.default_rng(1).normal(scale=0.5, size=200)
@@ -107,7 +107,7 @@ print(interval['y']['lower'], interval['y']['upper'])
 Turn raw quantile predictions into intervals with coverage guarantees:
 
 ```python
-from quantile_regression_pdlp.conformal import ConformalQuantileRegression
+from quantile_guard.conformal import ConformalQuantileRegression
 
 base = QuantileRegression(tau=[0.05, 0.5, 0.95], se_method='analytical')
 cqr = ConformalQuantileRegression(base_estimator=base, coverage=0.90)
@@ -122,7 +122,7 @@ print(cqr.empirical_coverage(X_test, y_test))  # should be >= 0.90
 For survival data with right- or left-censoring:
 
 ```python
-from quantile_regression_pdlp import CensoredQuantileRegression
+from quantile_guard import CensoredQuantileRegression
 
 model = CensoredQuantileRegression(tau=0.5, censoring='right', se_method='analytical')
 model.fit(X, observed_time, event_indicator=delta)
@@ -133,8 +133,8 @@ model.fit(X, observed_time, event_indicator=delta)
 The metrics and diagnostics modules work with predictions from any source — not just this package:
 
 ```python
-from quantile_regression_pdlp.metrics import quantile_evaluation_report
-from quantile_regression_pdlp.postprocess import crossing_summary
+from quantile_guard.metrics import quantile_evaluation_report
+from quantile_guard.postprocess import crossing_summary
 
 # Evaluate predictions from XGBoost, LightGBM, or any other model
 report = quantile_evaluation_report(y_true, predictions, taus)
@@ -175,7 +175,7 @@ The joint formulation also achieves slightly better pinball loss — the non-cro
 
 **Speed tradeoff:** This package solves a single joint LP with non-crossing constraints, which is slower than fitting each quantile independently. The value is in the guarantee and the richer downstream workflows. For single-quantile fits where speed matters most, sklearn or statsmodels may be more appropriate.
 
-Full results: [Benchmarks](https://joshvern.github.io/quantile_regression_pdlp/benchmarks/) | [Reproduce locally](https://joshvern.github.io/quantile_regression_pdlp/benchmarks/#reproducing-these-results)
+Full results: [Benchmarks](https://joshvern.github.io/quantile_guard/benchmarks/) | [Reproduce locally](https://joshvern.github.io/quantile_guard/benchmarks/#reproducing-these-results)
 
 ## When to Use This Package
 
@@ -193,7 +193,7 @@ Full results: [Benchmarks](https://joshvern.github.io/quantile_regression_pdlp/b
 
 ## Documentation
 
-Full docs: [joshvern.github.io/quantile_regression_pdlp](https://joshvern.github.io/quantile_regression_pdlp/)
+Full docs: [joshvern.github.io/quantile_guard](https://joshvern.github.io/quantile_guard/)
 
 ## Implementation
 
@@ -216,7 +216,7 @@ QuantileRegression(tau=0.5, use_sparse=True)          # scipy sparse
 
 ## Contributing
 
-Contributions welcome! Open an issue or submit a pull request on [GitHub](https://github.com/joshvern/quantile_regression_pdlp).
+Contributions welcome! Open an issue or submit a pull request on [GitHub](https://github.com/joshvern/quantile_guard).
 
 ## License
 

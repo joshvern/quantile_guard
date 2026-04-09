@@ -4,7 +4,7 @@
 
 ```python
 import numpy as np
-from quantile_regression_pdlp import QuantileRegression
+from quantile_guard import QuantileRegression
 
 X = np.random.default_rng(0).normal(size=(200, 2))
 y = 2.0 * X[:, 0] - 1.0 * X[:, 1] + np.random.default_rng(1).normal(scale=0.5, size=200)
@@ -162,7 +162,7 @@ print(model.pseudo_r_squared_)
 For right- or left-censored (survival) data using Powell's iterative algorithm.
 
 ```python
-from quantile_regression_pdlp import CensoredQuantileRegression
+from quantile_guard import CensoredQuantileRegression
 
 model = CensoredQuantileRegression(tau=0.5, censoring='right',
                                     se_method='analytical')

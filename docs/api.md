@@ -5,7 +5,7 @@
 ### `QuantileRegression`
 
 ```python
-from quantile_regression_pdlp import QuantileRegression
+from quantile_guard import QuantileRegression
 ```
 
 ### Parameters
@@ -95,7 +95,7 @@ Returns a matplotlib `Figure`.
 ### `CensoredQuantileRegression`
 
 ```python
-from quantile_regression_pdlp import CensoredQuantileRegression
+from quantile_guard import CensoredQuantileRegression
 ```
 
 Subclass of `QuantileRegression` for right- or left-censored data.
@@ -124,7 +124,7 @@ All `QuantileRegression` parameters are also accepted.
 ### `ConformalQuantileRegression`
 
 ```python
-from quantile_regression_pdlp.conformal import ConformalQuantileRegression
+from quantile_guard.conformal import ConformalQuantileRegression
 ```
 
 Split conformal calibration for prediction intervals with finite-sample coverage
@@ -173,7 +173,7 @@ Returns `dict[str, float]` -- mean interval width per output.
 Standalone evaluation functions that work with predictions from **any** quantile model — not just this package.
 
 ```python
-from quantile_regression_pdlp.metrics import (
+from quantile_guard.metrics import (
     pinball_loss,
     multi_quantile_pinball_loss,
     empirical_coverage,
@@ -203,7 +203,7 @@ from quantile_regression_pdlp.metrics import (
 Diagnose and fix quantile crossings from any model's predictions.
 
 ```python
-from quantile_regression_pdlp.postprocess import (
+from quantile_guard.postprocess import (
     check_crossing,
     crossing_summary,
     rearrange_quantiles,

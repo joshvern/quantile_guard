@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from quantile_regression_pdlp.postprocess import (
+from quantile_guard.postprocess import (
     check_crossing,
     crossing_summary,
     rearrange_quantiles,
@@ -107,7 +107,7 @@ class TestRearrangeQuantiles:
         assert np.all(diffs >= 0), "Rearranged predictions should be monotone"
 
     def test_crossing_rate_drops_to_zero(self):
-        from quantile_regression_pdlp.metrics import crossing_rate
+        from quantile_guard.metrics import crossing_rate
 
         rng = np.random.default_rng(42)
         preds = rng.normal(size=(100, 3))
@@ -123,7 +123,7 @@ class TestRearrangeQuantiles:
 
     def test_integration_with_model(self):
         """Rearrangement works on QuantileRegression output (already monotone)."""
-        from quantile_regression_pdlp import QuantileRegression
+        from quantile_guard import QuantileRegression
 
         rng = np.random.default_rng(42)
         X = rng.normal(size=(100, 2))

@@ -12,7 +12,7 @@ The pinball (check) loss is the natural scoring rule for quantile predictions.
 Lower is better.
 
 ```python
-from quantile_regression_pdlp.metrics import pinball_loss
+from quantile_guard.metrics import pinball_loss
 
 loss = pinball_loss(y_true, y_pred, tau=0.5)
 ```
@@ -20,7 +20,7 @@ loss = pinball_loss(y_true, y_pred, tau=0.5)
 For multiple quantiles at once:
 
 ```python
-from quantile_regression_pdlp.metrics import multi_quantile_pinball_loss
+from quantile_guard.metrics import multi_quantile_pinball_loss
 import numpy as np
 
 taus = [0.1, 0.5, 0.9]
@@ -35,7 +35,7 @@ Check whether prediction intervals actually contain the right fraction of
 observations:
 
 ```python
-from quantile_regression_pdlp.metrics import empirical_coverage, mean_interval_width
+from quantile_guard.metrics import empirical_coverage, mean_interval_width
 
 cov = empirical_coverage(y_true, lower=pred_q10, upper=pred_q90)
 width = mean_interval_width(lower=pred_q10, upper=pred_q90)
@@ -51,7 +51,7 @@ percentile prediction may fall below the 10th. This is a sign of model
 misspecification or insufficient constraints.
 
 ```python
-from quantile_regression_pdlp.metrics import crossing_rate, crossing_magnitude
+from quantile_guard.metrics import crossing_rate, crossing_magnitude
 
 rate = crossing_rate(predictions, taus)       # fraction of rows with crossings
 mag = crossing_magnitude(predictions, taus)   # average severity
@@ -67,7 +67,7 @@ The interval score (Gneiting & Raftery, 2007) combines width and coverage
 penalties into a single number. Lower is better.
 
 ```python
-from quantile_regression_pdlp.metrics import interval_score
+from quantile_guard.metrics import interval_score
 
 score = interval_score(y_true, lower, upper, alpha=0.1)  # for 90% intervals
 ```
@@ -77,7 +77,7 @@ score = interval_score(y_true, lower, upper, alpha=0.1)  # for 90% intervals
 Get all metrics at once:
 
 ```python
-from quantile_regression_pdlp.metrics import quantile_evaluation_report
+from quantile_guard.metrics import quantile_evaluation_report
 
 report = quantile_evaluation_report(y_true, predictions, taus)
 print(report)

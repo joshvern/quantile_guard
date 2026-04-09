@@ -6,12 +6,12 @@ fitted models) and demonstrates the postprocess utilities.
 """
 
 import numpy as np
-from quantile_regression_pdlp.postprocess import (
+from quantile_guard.postprocess import (
     check_crossing,
     crossing_summary,
     rearrange_quantiles,
 )
-from quantile_regression_pdlp.metrics import crossing_rate
+from quantile_guard.metrics import crossing_rate
 
 # Simulate predictions with intentional crossings
 rng = np.random.default_rng(42)

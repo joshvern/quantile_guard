@@ -22,7 +22,7 @@ crossings.
 ## Detecting crossings
 
 ```python
-from quantile_regression_pdlp.postprocess import check_crossing, crossing_summary
+from quantile_guard.postprocess import check_crossing, crossing_summary
 import numpy as np
 
 # predictions: (n_samples, n_quantiles), one column per tau
@@ -52,7 +52,7 @@ summary = crossing_summary(predictions, taus)
 The simplest fix: sort each row so predictions are non-decreasing.
 
 ```python
-from quantile_regression_pdlp.postprocess import rearrange_quantiles
+from quantile_guard.postprocess import rearrange_quantiles
 
 fixed = rearrange_quantiles(predictions, taus)
 # array([[1., 2., 3.],

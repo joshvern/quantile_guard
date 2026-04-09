@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Benchmark: quantile_regression_pdlp vs sklearn vs statsmodels.
+Benchmark: quantile_guard vs sklearn vs statsmodels.
 
 Designed to show where this package's joint LP formulation, non-crossing
 constraints, and sparse solver matter: large datasets, many features, many
@@ -21,8 +21,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from quantile_regression_pdlp import QuantileRegression
-from quantile_regression_pdlp.metrics import (
+from quantile_guard import QuantileRegression
+from quantile_guard.metrics import (
     crossing_rate,
     empirical_coverage,
     mean_interval_width,
@@ -283,12 +283,12 @@ def run_benchmarks():
 
 def add_metadata(df: pd.DataFrame) -> pd.DataFrame:
     """Add environment metadata columns."""
-    import quantile_regression_pdlp
+    import quantile_guard
 
     df = df.copy()
     df["python_version"] = platform.python_version()
     df["platform"] = platform.platform()
-    df["package_version"] = getattr(quantile_regression_pdlp, "__version__", "unknown")
+    df["package_version"] = getattr(quantile_guard, "__version__", "unknown")
     return df
 
 

@@ -6,8 +6,8 @@ using pinball loss, coverage, crossing diagnostics, and interval score.
 """
 
 import numpy as np
-from quantile_regression_pdlp import QuantileRegression
-from quantile_regression_pdlp.metrics import (
+from quantile_guard import QuantileRegression
+from quantile_guard.metrics import (
     pinball_loss,
     empirical_coverage,
     mean_interval_width,

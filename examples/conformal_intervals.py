@@ -6,9 +6,9 @@ showing improved coverage on held-out data.
 """
 
 import numpy as np
-from quantile_regression_pdlp import QuantileRegression
-from quantile_regression_pdlp.conformal import ConformalQuantileRegression
-from quantile_regression_pdlp.metrics import empirical_coverage, mean_interval_width
+from quantile_guard import QuantileRegression
+from quantile_guard.conformal import ConformalQuantileRegression
+from quantile_guard.metrics import empirical_coverage, mean_interval_width
 
 # Generate heteroscedastic data
 rng = np.random.default_rng(42)

@@ -1,5 +1,5 @@
 """
-Benchmark / development tests comparing quantile_regression_pdlp against
+Benchmark / development tests comparing quantile_guard against
 sklearn's QuantileRegressor.
 
 These are NOT part of the core test suite. Run them explicitly:
@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 from sklearn.linear_model import QuantileRegressor
 
-from quantile_regression_pdlp import QuantileRegression
+from quantile_guard import QuantileRegression
 
 
 class TestAgainstSklearn:

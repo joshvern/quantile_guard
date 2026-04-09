@@ -1,4 +1,4 @@
-# quantile-regression-pdlp
+# quantile-guard
 
 **Non-crossing quantile models with built-in inference, calibration, and evaluation.**
 
@@ -47,20 +47,20 @@ See [Benchmarks](benchmarks.md) for full results and reproduction instructions.
 ## Installation
 
 ```bash
-pip install quantile-regression-pdlp
+pip install quantile-guard
 ```
 
 With optional extras:
 
 ```bash
-pip install quantile-regression-pdlp[all]  # formulas + plots
+pip install quantile-guard[all]  # formulas + plots
 ```
 
 ## Quick Example
 
 ```python
 import numpy as np
-from quantile_regression_pdlp import QuantileRegression
+from quantile_guard import QuantileRegression
 
 X = np.random.default_rng(0).normal(size=(200, 3))
 y = X @ [2.0, -1.5, 0.8] + np.random.default_rng(1).normal(scale=0.5, size=200)

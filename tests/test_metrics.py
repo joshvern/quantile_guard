@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from quantile_regression_pdlp.metrics import (
+from quantile_guard.metrics import (
     pinball_loss,
     multi_quantile_pinball_loss,
     empirical_coverage,
@@ -246,7 +246,7 @@ class TestQuantileEvaluationReport:
 
     def test_integration_with_model(self):
         """Metrics work with QuantileRegression predictions."""
-        from quantile_regression_pdlp import QuantileRegression
+        from quantile_guard import QuantileRegression
 
         rng = np.random.default_rng(42)
         X = rng.normal(size=(100, 2))

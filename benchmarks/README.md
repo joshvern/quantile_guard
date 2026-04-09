@@ -1,6 +1,6 @@
 # Benchmarks
 
-Reproducible benchmarks comparing `quantile_regression_pdlp` against other quantile regression implementations.
+Reproducible benchmarks comparing `quantile_guard` against other quantile regression implementations.
 
 ## Quick Start
 

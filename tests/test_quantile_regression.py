@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quantile_regression_pdlp import QuantileRegression
+from quantile_guard import QuantileRegression
 
 
 def _make_synthetic_regression(n_samples: int = 40, n_features: int = 3, seed: int = 0):

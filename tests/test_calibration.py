@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from quantile_regression_pdlp.calibration import (
+from quantile_guard.calibration import (
     calibration_summary,
     coverage_by_bin,
     coverage_by_group,

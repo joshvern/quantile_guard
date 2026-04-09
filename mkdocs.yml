@@ -1,8 +1,8 @@
-site_name: quantile-regression-pdlp
+site_name: quantile-guard
 site_description: Non-crossing quantile models with built-in inference, calibration, and evaluation.
-site_url: https://joshvern.github.io/quantile_regression_pdlp/
-repo_url: https://github.com/joshvern/quantile_regression_pdlp
-repo_name: joshvern/quantile_regression_pdlp
+site_url: https://joshvern.github.io/quantile-guard/
+repo_url: https://github.com/joshvern/quantile-guard
+repo_name: joshvern/quantile-guard
 edit_uri: edit/main/docs/
 
 theme:

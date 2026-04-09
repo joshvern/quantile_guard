@@ -25,8 +25,8 @@ future observations in expectation.
 ## Basic usage
 
 ```python
-from quantile_regression_pdlp import QuantileRegression
-from quantile_regression_pdlp.conformal import ConformalQuantileRegression
+from quantile_guard import QuantileRegression
+from quantile_guard.conformal import ConformalQuantileRegression
 
 # Base model with quantiles that bracket the target coverage
 base = QuantileRegression(tau=[0.05, 0.5, 0.95], se_method='analytical')

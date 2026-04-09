@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from quantile_regression_pdlp import QuantileRegression
-from quantile_regression_pdlp.conformal import ConformalQuantileRegression
+from quantile_guard import QuantileRegression
+from quantile_guard.conformal import ConformalQuantileRegression
 
 
 @pytest.fixture

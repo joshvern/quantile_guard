@@ -1,4 +1,4 @@
-# quantile_regression_pdlp/quantile_regression.py
+# quantile_guard/quantile_regression.py
 
 from ortools.linear_solver import pywraplp
 import numpy as np

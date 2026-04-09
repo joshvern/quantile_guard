@@ -15,7 +15,7 @@ import tempfile
 import numpy as np
 import pytest
 
-from quantile_regression_pdlp import QuantileRegression, CensoredQuantileRegression
+from quantile_guard import QuantileRegression, CensoredQuantileRegression
 
 R_ENV = os.path.join(os.path.dirname(__file__), '..', '.r_env')
 MICROMAMBA = '/tmp/bin/micromamba'

@@ -3,8 +3,8 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "quantile-regression-pdlp"
-version = "0.4.2"
+name = "quantile-guard"
+version = "0.5.0"
 description = "Non-crossing quantile regression toolkit with joint multi-quantile fitting, inference, conformal calibration, and evaluation. Scikit-learn compatible."
 readme = "README.md"
 license = { text = "MIT" }
@@ -31,9 +31,9 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/joshvern/quantile_regression_pdlp"
-Issues = "https://github.com/joshvern/quantile_regression_pdlp/issues"
-Documentation = "https://joshvern.github.io/quantile_regression_pdlp/"
+Repository = "https://github.com/joshvern/quantile-guard"
+Issues = "https://github.com/joshvern/quantile-guard/issues"
+Documentation = "https://joshvern.github.io/quantile-guard/"
 
 [project.optional-dependencies]
 test = [

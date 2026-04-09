@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quantile_regression_pdlp import QuantileRegression, CensoredQuantileRegression
+from quantile_guard import QuantileRegression, CensoredQuantileRegression
 
 try:
     import matplotlib

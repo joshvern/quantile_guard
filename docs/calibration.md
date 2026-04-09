@@ -22,7 +22,7 @@ find where coverage breaks down.
 Check whether coverage holds across categorical subgroups:
 
 ```python
-from quantile_regression_pdlp.calibration import coverage_by_group
+from quantile_guard.calibration import coverage_by_group
 
 result = coverage_by_group(y_test, lower, upper, groups=region_labels)
 for group, stats in result.items():
@@ -35,7 +35,7 @@ for group, stats in result.items():
 Check whether coverage degrades in certain regions of a continuous feature:
 
 ```python
-from quantile_regression_pdlp.calibration import coverage_by_bin
+from quantile_guard.calibration import coverage_by_bin
 
 bins = coverage_by_bin(y_test, lower, upper, feature=X_test[:, 0], n_bins=5)
 for b in bins:
@@ -53,7 +53,7 @@ For models with multiple quantile predictions, compare expected vs actual
 coverage for each symmetric quantile pair:
 
 ```python
-from quantile_regression_pdlp.calibration import nominal_vs_empirical_coverage
+from quantile_guard.calibration import nominal_vs_empirical_coverage
 
 taus = [0.05, 0.25, 0.5, 0.75, 0.95]
 result = nominal_vs_empirical_coverage(y_test, predictions, taus)
@@ -70,7 +70,7 @@ Narrower intervals are better, as long as coverage is maintained. The
 sharpness summary reports interval width statistics:
 
 ```python
-from quantile_regression_pdlp.calibration import sharpness_summary
+from quantile_guard.calibration import sharpness_summary
 
 stats = sharpness_summary(lower, upper)
 print(f"Mean width: {stats['mean_width']:.3f}")
@@ -83,7 +83,7 @@ print(f"IQR of widths: {stats['iqr_width']:.3f}")
 Combine all diagnostics into a single summary:
 
 ```python
-from quantile_regression_pdlp.calibration import calibration_summary
+from quantile_guard.calibration import calibration_summary
 
 report = calibration_summary(
     y_test, lower, upper,

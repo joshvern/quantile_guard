@@ -56,8 +56,8 @@ class ConformalQuantileRegression(BaseEstimator):
 
     Examples
     --------
-    >>> from quantile_regression_pdlp import QuantileRegression
-    >>> from quantile_regression_pdlp.conformal import ConformalQuantileRegression
+    >>> from quantile_guard import QuantileRegression
+    >>> from quantile_guard.conformal import ConformalQuantileRegression
     >>> base = QuantileRegression(tau=[0.05, 0.5, 0.95], se_method='analytical')
     >>> cqr = ConformalQuantileRegression(base_estimator=base, coverage=0.90)
     >>> cqr.fit(X_train, y_train)
