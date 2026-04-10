@@ -111,7 +111,7 @@ def test_report_metadata_documents_actual_benchmark_shape():
             "p": [10, 10],
             "n_taus": [7, 13],
             "noise": ["heavy", "heavy"],
-            "package_version": ["0.6.1", "0.6.1"],
+            "package_version": [quantile_guard.__version__, quantile_guard.__version__],
             "python_version": ["3.11.0", "3.11.0"],
             "platform": ["Linux", "Linux"],
         }
@@ -122,4 +122,4 @@ def test_report_metadata_documents_actual_benchmark_shape():
     assert "Quantile counts: 7, 13" in metadata
     assert "n=500/p=10/heavy" in metadata
     assert "n=1,000/p=10/heavy" in metadata
-    assert "Package version: 0.6.1" in metadata
+    assert f"Package version: {quantile_guard.__version__}" in metadata
