@@ -11,7 +11,7 @@ Fit multiple quantiles jointly with monotonicity constraints that guarantee pred
 When you fit quantiles independently (as sklearn and statsmodels do), nothing prevents the 90th percentile prediction from falling below the 10th.
 
 !!! warning "Crossing is common on real data"
-    At n=500 with 13 quantile levels, **30% of test samples** show crossed predictions when using sklearn or statsmodels. quantile-guard produces zero crossings by construction — and the joint formulation achieves equal or better pinball loss. See [Benchmarks](benchmarks.md) for full results.
+    At n=500 with 13 quantile levels, **30% of test samples** show crossed predictions when using sklearn or statsmodels. quantile-guard produces zero crossings by construction — and the joint formulation achieves comparable or better pinball loss in most benchmark settings. See [Benchmarks](benchmarks.md) for full results.
 
 ## Workflows
 
@@ -108,7 +108,7 @@ print(model.pseudo_r_squared_)
 
 ## Benchmark Evidence
 
-Independent fitters produce 4-30% crossing rates on challenging data; quantile-guard produces zero — while matching or improving pinball loss:
+Independent fitters produce 4-30% crossing rates on challenging data; quantile-guard produces zero — while matching pinball loss and improving it in the hardest small-sample settings:
 
 | n | features | quantiles | Crossing (quantile-guard) | Crossing (sklearn) | Pinball (quantile-guard) | Pinball (sklearn) |
 |---:|---:|---:|---:|---:|---:|---:|

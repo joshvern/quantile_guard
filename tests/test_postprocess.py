@@ -47,6 +47,10 @@ class TestCheckCrossing:
         with pytest.raises(ValueError, match="at least 2"):
             check_crossing([[1]], [0.5])
 
+    def test_duplicate_taus_rejected(self):
+        with pytest.raises(ValueError, match="unique"):
+            check_crossing([[1, 2]], [0.1, 0.1])
+
 
 class TestCrossingSummary:
 

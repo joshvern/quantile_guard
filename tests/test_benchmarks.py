@@ -99,3 +99,27 @@ def test_report_generates_figures_for_actual_quantile_counts(tmp_path):
     assert (tmp_path / "fit_time_vs_n.png").exists()
     assert (tmp_path / "pinball_loss_vs_n.png").exists()
     assert (tmp_path / "crossing_rate.png").exists()
+    assert (tmp_path / "benchmark_overview.png").exists()
+
+
+def test_report_metadata_documents_actual_benchmark_shape():
+    report = _load_module(ROOT / "benchmarks" / "report.py", "benchmark_report_meta")
+    df = pd.DataFrame(
+        {
+            "model": ["sklearn (independent)", "PDLP sparse (joint, non-crossing)"],
+            "n": [500, 1000],
+            "p": [10, 10],
+            "n_taus": [7, 13],
+            "noise": ["heavy", "heavy"],
+            "package_version": ["0.6.1", "0.6.1"],
+            "python_version": ["3.11.0", "3.11.0"],
+            "platform": ["Linux", "Linux"],
+        }
+    )
+
+    metadata = report.generate_metadata_section(df)
+
+    assert "Quantile counts: 7, 13" in metadata
+    assert "n=500/p=10/heavy" in metadata
+    assert "n=1,000/p=10/heavy" in metadata
+    assert "Package version: 0.6.1" in metadata

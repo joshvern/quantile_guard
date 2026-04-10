@@ -25,11 +25,10 @@ Compares this package against:
 |---------|-------|-------|
 | **This package** | `QuantileRegression` | Joint multi-quantile, non-crossing constraints |
 | **scikit-learn** | `QuantileRegressor` | Per-quantile fitting, HiGHS solver |
-| **statsmodels** | `QuantReg` | Per-quantile fitting, interior point |
+| **statsmodels** | `QuantReg` | Per-quantile fitting via `QuantReg.fit()` |
 
 Across:
-- Dataset sizes: 500, 1000, 2000, 5000 samples
-- Feature counts: 10, 20
+- Dataset configurations: `(n=500, p=10)`, `(n=1000, p=10)`, `(n=2000, p=20)`, `(n=5000, p=20)`
 - Quantile sets: 7 quantiles `[0.05, ..., 0.95]` and 13 quantiles `[0.01, ..., 0.99]`
 - Noise: heavy-tailed heteroscedastic (Student-t, df=3)
 
@@ -54,7 +53,12 @@ benchmarks/results/
     fit_time_vs_n.png
     pinball_loss_vs_n.png
     crossing_rate.png
+    benchmark_overview.png
 ```
+
+`benchmark_overview.png` is a compact shareable snapshot of the hardest
+benchmark grid, intended for README/docs/social snippets where the full tables
+would be too dense.
 
 ## Key Findings
 

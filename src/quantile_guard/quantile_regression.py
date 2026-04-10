@@ -149,6 +149,10 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
         """
         X, y, weights = self._validate_inputs(X, y, weights)
         self._validate_tau()
+        if clusters is not None and len(np.asarray(clusters)) != X.shape[0]:
+            raise ValueError(
+                "clusters must have the same length as the number of observations."
+            )
 
         n_samples, n_features = X.shape
         X_augmented = np.hstack((np.ones((n_samples, 1)), X))
@@ -275,6 +279,8 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
         elif isinstance(self.tau, list):
             if not all(isinstance(q, (int, float)) and 0 < q < 1 for q in self.tau):
                 raise ValueError("All quantiles tau must be floats between 0 and 1.")
+            if len(set(self.tau)) != len(self.tau):
+                raise ValueError("Quantile tau values must be unique.")
             self.tau = sorted([float(q) for q in self.tau])
         else:
             raise TypeError("tau must be a float or a list of floats.")
@@ -886,19 +892,17 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
 
         X_aug = np.hstack((np.ones((X.shape[0], 1)), X))
 
-        y_pred = {}
-        for q in self.tau:
-            y_pred[q] = {}
-            for output in self.output_names_:
-                coef = np.concatenate(([self.intercept_[q][output]], self.coef_[q][output]))
-                y_pred[q][output] = X_aug @ coef
-
-        if self.enforce_non_crossing_predict and len(self.tau) > 1:
-            for output in self.output_names_:
-                pred_mat = np.column_stack([y_pred[q][output] for q in self.tau])
-                pred_sorted = np.sort(pred_mat, axis=1)
-                for idx, q in enumerate(self.tau):
-                    y_pred[q][output] = pred_sorted[:, idx]
+        y_pred = {q: {} for q in self.tau}
+        for output in self.output_names_:
+            coef_matrix = np.column_stack([
+                np.concatenate(([self.intercept_[q][output]], self.coef_[q][output]))
+                for q in self.tau
+            ])
+            pred_mat = X_aug @ coef_matrix
+            if self.enforce_non_crossing_predict and len(self.tau) > 1:
+                pred_mat = np.sort(pred_mat, axis=1)
+            for idx, q in enumerate(self.tau):
+                y_pred[q][output] = pred_mat[:, idx]
 
         return y_pred
 
@@ -923,6 +927,8 @@ class QuantileRegression(BaseEstimator, RegressorMixin):
         """
         if len(self.tau) < 2:
             raise ValueError("predict_interval requires at least 2 fitted quantiles.")
+        if not 0 < coverage < 1:
+            raise ValueError(f"coverage must be in (0, 1), got {coverage}")
 
         target_lo = (1 - coverage) / 2
         target_hi = 1 - target_lo

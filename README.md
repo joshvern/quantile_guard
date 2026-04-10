@@ -30,7 +30,7 @@ When you fit quantiles one at a time (as sklearn and statsmodels do), nothing pr
 | 1,000 | 10 | 13 | **16.5%** | **0%** |
 | 2,000 | 20 | 13 | **11.0%** | **0%** |
 
-quantile-guard eliminates crossings by construction — and the joint formulation acts as beneficial regularization, achieving **equal or better pinball loss** than independent fitting.
+quantile-guard eliminates crossings by construction — and in these benchmarks the joint formulation often acts as beneficial regularization, with **comparable or better pinball loss in most settings**.
 
 [Full benchmark results](https://joshvern.github.io/quantile_guard/benchmarks/) | [Reproduce locally](https://joshvern.github.io/quantile_guard/benchmarks/#reproducing-these-results)
 
@@ -115,7 +115,7 @@ model.fit(X, y)
 # Summaries with coefficients, SEs, p-values, and 95% CIs
 print(model.summary()[0.5]['y'])
 
-# Prediction intervals (guaranteed monotone: lower < median < upper)
+# Prediction intervals (guaranteed monotone: lower <= median <= upper)
 interval = model.predict_interval(X[:5], coverage=0.80)
 print(interval['y']['lower'], interval['y']['upper'])
 ```
@@ -180,7 +180,7 @@ model.fit(X, y, clusters=group_labels)
 
 ## Benchmarks
 
-Tested on heavy-tailed heteroscedastic data (Student-t noise, 10-20 features, up to 13 quantiles). Independent fitters cross; quantile-guard does not — while matching or improving prediction quality:
+Tested on heavy-tailed heteroscedastic data (Student-t noise, 10-20 features, up to 13 quantiles). Independent fitters cross; quantile-guard does not — while matching prediction quality and improving it in the hardest small-sample settings:
 
 | n | features | quantiles | Crossing (quantile-guard) | Crossing (sklearn) | Pinball (quantile-guard) | Pinball (sklearn) |
 |---:|---:|---:|---:|---:|---:|---:|

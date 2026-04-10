@@ -29,7 +29,7 @@ At n=500 with 13 quantiles, **30% of test samples have crossings** in sklearn/st
 
 ## Pinball Loss
 
-The joint non-crossing formulation matches or slightly improves pinball loss compared to independent fitting. The improvement is most visible at small n with many quantiles, where the non-crossing constraints act as beneficial regularization.
+The joint non-crossing formulation matches pinball loss closely and improves it in the hardest small-sample settings. The improvement is most visible at small n with many quantiles, where the non-crossing constraints can act as beneficial regularization.
 
 | n | p | quantiles | quantile-guard | sklearn | statsmodels |
 |---:|---:|---:|---:|---:|---:|
@@ -74,7 +74,7 @@ If you need only a single quantile with no crossing concerns, sklearn or statsmo
 
 ## Empirical Coverage
 
-Coverage of the interval formed by the outermost quantile predictions (e.g., [0.05, 0.95] for 7 quantiles). All methods achieve similar marginal coverage since they solve the same underlying optimization.
+Coverage of the interval formed by the outermost quantile predictions (e.g., [0.05, 0.95] for 7 quantiles). Marginal coverage is broadly similar across methods on this synthetic benchmark, though the independent fits can deviate more when crossings are severe.
 
 | n | p | quantiles | Nominal | quantile-guard | sklearn | statsmodels |
 |---:|---:|---:|---:|---:|---:|---:|
@@ -113,7 +113,7 @@ quantile-guard is more than a quantile regressor. The benchmark comparison above
 | Censored QR | Right- and left-censored survival models |
 | Regularization | L1, elastic net, SCAD, MCP |
 
-None of these are available in sklearn's `QuantileRegressor` or statsmodels' `QuantReg`.
+sklearn's `QuantileRegressor` does not provide this end-to-end workflow, and statsmodels' `QuantReg` covers only part of the inference story.
 
 ## Reproducing These Results
 

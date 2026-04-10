@@ -23,6 +23,8 @@ def _validate_predictions_taus(
     taus = list(taus)
     if len(taus) < 2:
         raise ValueError(f"taus must have at least 2 elements, got {len(taus)}")
+    if len(set(taus)) != len(taus):
+        raise ValueError("taus must be unique")
     for t in taus:
         if not 0 < t < 1:
             raise ValueError(f"Each tau must be in (0, 1), got {t}")

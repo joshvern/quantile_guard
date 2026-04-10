@@ -74,6 +74,23 @@ class TestMultiQuantilePinballLoss:
         with pytest.raises(ValueError, match="at least 2"):
             multi_quantile_pinball_loss([1], [[1]], [0.5])
 
+    def test_unsorted_taus_are_aligned_to_prediction_columns(self):
+        y = np.array([0.0, 1.0, 2.0])
+        taus = [0.5, 0.1, 0.9]
+        preds = np.array([
+            [0.0, -1.0, 1.0],
+            [1.0, 0.0, 2.0],
+            [2.0, 1.0, 3.0],
+        ])
+        result = multi_quantile_pinball_loss(y, preds, taus)
+        assert result[0.1] == pytest.approx(0.1)
+        assert result[0.5] == pytest.approx(0.0)
+        assert result[0.9] == pytest.approx(0.1)
+
+    def test_duplicate_taus_rejected(self):
+        with pytest.raises(ValueError, match="unique"):
+            multi_quantile_pinball_loss([1, 2], [[1, 2], [3, 4]], [0.1, 0.1])
+
 
 class TestEmpiricalCoverage:
 
@@ -145,6 +162,10 @@ class TestCrossingRate:
         preds = np.array([[1, 1, 1]], dtype=float)
         assert crossing_rate(preds, [0.1, 0.5, 0.9]) == pytest.approx(0.0)
 
+    def test_unsorted_taus_are_reordered_before_checking_crossings(self):
+        preds = np.array([[2.0, 1.0, 3.0]], dtype=float)
+        assert crossing_rate(preds, [0.5, 0.1, 0.9]) == pytest.approx(0.0)
+
 
 class TestCrossingMagnitude:
 
@@ -164,6 +185,10 @@ class TestCrossingMagnitude:
         ], dtype=float)
         # mean of [0, 2] = 1.0
         assert crossing_magnitude(preds, [0.1, 0.5, 0.9]) == pytest.approx(1.0)
+
+    def test_unsorted_taus_are_reordered_before_measuring_magnitude(self):
+        preds = np.array([[2.0, 1.0, 3.0]], dtype=float)
+        assert crossing_magnitude(preds, [0.5, 0.1, 0.9]) == pytest.approx(0.0)
 
 
 class TestIntervalScore:
@@ -242,6 +267,18 @@ class TestQuantileEvaluationReport:
         lower = np.array([0.0, 1.0, 2.0])
         upper = np.array([2.0, 3.0, 4.0])
         report = quantile_evaluation_report(y, preds, taus, lower=lower, upper=upper)
+        assert report["coverage"] == pytest.approx(1.0)
+
+    def test_report_uses_sorted_outer_bounds_for_unsorted_taus(self):
+        y = np.array([0.0, 1.0, 2.0])
+        taus = [0.5, 0.1, 0.9]
+        preds = np.array([
+            [0.0, -1.0, 1.0],
+            [1.0, 0.0, 2.0],
+            [2.0, 1.0, 3.0],
+        ])
+        report = quantile_evaluation_report(y, preds, taus)
+        assert report["crossing_rate"] == pytest.approx(0.0)
         assert report["coverage"] == pytest.approx(1.0)
 
     def test_integration_with_model(self):

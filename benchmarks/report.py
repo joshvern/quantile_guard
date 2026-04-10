@@ -14,9 +14,64 @@ import numpy as np
 import pandas as pd
 
 
+MODEL_ORDER = [
+    "PDLP (joint, non-crossing)",
+    "PDLP sparse (joint, non-crossing)",
+    "sklearn (independent)",
+    "statsmodels (independent)",
+]
+
+
+def _ordered_models(df: pd.DataFrame) -> list:
+    """Return models in a stable benchmark-report order."""
+    present = list(df["model"].dropna().unique())
+    ordered = [model for model in MODEL_ORDER if model in present]
+    ordered.extend(sorted(model for model in present if model not in ordered))
+    return ordered
+
+
+def _reindex_model_columns(pivot: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
+    """Use stable model order in markdown tables."""
+    return pivot.reindex(columns=_ordered_models(df))
+
+
 def load_results(path: str) -> pd.DataFrame:
     """Load benchmark CSV."""
     return pd.read_csv(path)
+
+
+def generate_metadata_section(df: pd.DataFrame) -> str:
+    """Generate markdown metadata for a benchmark run."""
+    lines = ["## Benchmark Run Metadata", ""]
+
+    configs = (
+        df[["n", "p", "noise"]]
+        .drop_duplicates()
+        .sort_values(["n", "p", "noise"])
+    )
+    config_text = ", ".join(
+        f"n={int(row.n):,}/p={int(row.p)}/{row.noise}"
+        for row in configs.itertuples(index=False)
+    )
+    quantile_counts = ", ".join(str(int(v)) for v in sorted(df["n_taus"].unique()))
+    models = ", ".join(_ordered_models(df))
+
+    lines.append(f"- Rows: {len(df)}")
+    lines.append(f"- Configs: {config_text}")
+    lines.append(f"- Quantile counts: {quantile_counts}")
+    lines.append(f"- Models: {models}")
+
+    for column, label in [
+        ("package_version", "Package version"),
+        ("python_version", "Python version"),
+        ("platform", "Platform"),
+    ]:
+        if column in df:
+            values = sorted(str(v) for v in df[column].dropna().unique())
+            lines.append(f"- {label}: {', '.join(values) if values else 'unknown'}")
+
+    lines.append("")
+    return "\n".join(lines)
 
 
 def generate_accuracy_table(df: pd.DataFrame) -> str:
@@ -28,6 +83,7 @@ def generate_accuracy_table(df: pd.DataFrame) -> str:
         aggfunc="first",
     )
     pivot = pivot.round(4)
+    pivot = _reindex_model_columns(pivot, df)
 
     lines = ["## Pinball Loss Comparison", ""]
     lines.append("| n | quantiles | " + " | ".join(pivot.columns) + " |")
@@ -48,6 +104,7 @@ def generate_timing_table(df: pd.DataFrame) -> str:
         aggfunc="first",
     )
     pivot = pivot.round(4)
+    pivot = _reindex_model_columns(pivot, df)
 
     lines = ["## Fit Time (seconds)", ""]
     lines.append("| n | quantiles | " + " | ".join(pivot.columns) + " |")
@@ -68,6 +125,7 @@ def generate_crossing_table(df: pd.DataFrame) -> str:
         aggfunc="first",
     )
     pivot = pivot.round(4)
+    pivot = _reindex_model_columns(pivot, df)
 
     lines = ["## Crossing Rate", ""]
     lines.append("| n | quantiles | " + " | ".join(pivot.columns) + " |")
@@ -88,6 +146,7 @@ def generate_coverage_table(df: pd.DataFrame) -> str:
         aggfunc="first",
     )
     pivot = pivot.round(4)
+    pivot = _reindex_model_columns(pivot, df)
 
     lines = ["## Empirical Coverage (outer quantile interval)", ""]
     lines.append("| n | quantiles | " + " | ".join(pivot.columns) + " |")
@@ -126,7 +185,7 @@ def generate_figures(df: pd.DataFrame, output_dir: Path):
     fig, axes = _iter_axes()
     for ax, n_taus in zip(axes, quantile_counts):
         subset_nt = df[df["n_taus"] == n_taus]
-        for model in subset_nt["model"].unique():
+        for model in _ordered_models(subset_nt):
             subset = subset_nt[subset_nt["model"] == model].sort_values("n")
             ax.plot(subset["n"], subset["fit_time_s"], "o-", label=model)
         ax.set_xlabel("Dataset size (n)")
@@ -142,7 +201,7 @@ def generate_figures(df: pd.DataFrame, output_dir: Path):
     fig, axes = _iter_axes()
     for ax, n_taus in zip(axes, quantile_counts):
         subset_nt = df[df["n_taus"] == n_taus]
-        for model in subset_nt["model"].unique():
+        for model in _ordered_models(subset_nt):
             subset = subset_nt[subset_nt["model"] == model].sort_values("n")
             ax.plot(subset["n"], subset["mean_pinball_loss"], "o-", label=model)
         ax.set_xlabel("Dataset size (n)")
@@ -161,7 +220,7 @@ def generate_figures(df: pd.DataFrame, output_dir: Path):
         if len(cross_df) == 0:
             continue
 
-        models = list(cross_df["model"].unique())
+        models = _ordered_models(cross_df)
         sizes = sorted(cross_df["n"].unique())
         x = np.arange(len(sizes))
         width = 0.8 / max(len(models), 1)
@@ -187,6 +246,32 @@ def generate_figures(df: pd.DataFrame, output_dir: Path):
     fig.tight_layout()
     fig.savefig(output_dir / "crossing_rate.png", dpi=150)
     plt.close(fig)
+
+    # 4. Promotion-friendly overview for the widest quantile grid.
+    focus_n_taus = quantile_counts[-1]
+    focus_df = df[df["n_taus"] == focus_n_taus].copy()
+    if len(focus_df) > 0:
+        fig, axes = plt.subplots(1, 3, figsize=(17, 5), squeeze=False)
+        axes = axes.flatten()
+        panels = [
+            ("crossing_rate", "Crossing Rate", None),
+            ("mean_pinball_loss", "Mean Pinball Loss", None),
+            ("fit_time_s", "Fit Time (seconds, log scale)", "log"),
+        ]
+        for ax, (metric, ylabel, yscale) in zip(axes, panels):
+            for model in _ordered_models(focus_df):
+                subset = focus_df[focus_df["model"] == model].sort_values("n")
+                ax.plot(subset["n"], subset[metric], "o-", label=model)
+            ax.set_xlabel("Dataset size (n)")
+            ax.set_ylabel(ylabel)
+            ax.grid(True, alpha=0.3)
+            if yscale is not None:
+                ax.set_yscale(yscale)
+            ax.legend(fontsize=8)
+        fig.suptitle(f"quantile-guard benchmark snapshot ({focus_n_taus} quantiles)")
+        fig.tight_layout()
+        fig.savefig(output_dir / "benchmark_overview.png", dpi=180)
+        plt.close(fig)
 
     print(f"Figures saved to {output_dir}")
 
@@ -216,6 +301,7 @@ def main():
     tables_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate tables
+    metadata = generate_metadata_section(df)
     accuracy = generate_accuracy_table(df)
     timing = generate_timing_table(df)
     crossing = generate_crossing_table(df)
@@ -226,6 +312,7 @@ def main():
         "",
         f"Generated from `{args.input}`",
         "",
+        metadata,
         accuracy,
         timing,
         crossing,

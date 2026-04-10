@@ -2,6 +2,16 @@
 
 Generated from `benchmarks/results/raw/linear_baselines.csv`
 
+## Benchmark Run Metadata
+
+- Rows: 30
+- Configs: n=500/p=10/heavy, n=1,000/p=10/heavy, n=2,000/p=20/heavy, n=5,000/p=20/heavy
+- Quantile counts: 7, 13
+- Models: PDLP (joint, non-crossing), PDLP sparse (joint, non-crossing), sklearn (independent), statsmodels (independent)
+- Package version: 0.6.1
+- Python version: 3.8.10
+- Platform: Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.29
+
 ## Pinball Loss Comparison
 
 | n | quantiles | PDLP (joint, non-crossing) | PDLP sparse (joint, non-crossing) | sklearn (independent) | statsmodels (independent) |

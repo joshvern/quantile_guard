@@ -156,6 +156,25 @@ class TestNominalVsEmpirical:
                 np.zeros(5), np.zeros((5, 2)), [0.1, 0.5, 0.9]
             )
 
+    def test_unsorted_taus_are_aligned_to_prediction_columns(self):
+        y = np.array([0.0, 1.0, 2.0, 3.0])
+        predictions = np.array([
+            [0.0, -1.0, 1.0],
+            [1.0, 0.0, 2.0],
+            [2.0, 1.0, 3.0],
+            [3.0, 2.0, 4.0],
+        ], dtype=float)
+        result = nominal_vs_empirical_coverage(y, predictions, [0.5, 0.1, 0.9])
+        assert result[0]["tau_lower"] == pytest.approx(0.1)
+        assert result[0]["tau_upper"] == pytest.approx(0.9)
+        assert result[0]["empirical_coverage"] == pytest.approx(1.0)
+
+    def test_duplicate_taus_rejected(self):
+        with pytest.raises(ValueError, match="unique"):
+            nominal_vs_empirical_coverage(
+                np.zeros(5), np.zeros((5, 2)), [0.1, 0.1]
+            )
+
 
 # ── sharpness_summary ──────────────────────────────────────────────────
 
@@ -228,3 +247,8 @@ class TestCalibrationSummary:
         )
         assert "coverage_by_group" in result
         assert "coverage_by_feature_bin" in result
+
+    def test_invalid_nominal_coverage(self, perfect_intervals):
+        y, lower, upper = perfect_intervals
+        with pytest.raises(ValueError, match="nominal_coverage"):
+            calibration_summary(y, lower, upper, nominal_coverage=1.1)

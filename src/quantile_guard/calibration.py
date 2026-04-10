@@ -29,6 +29,38 @@ def _validate_arrays(
     return y_true, lower, upper
 
 
+def _validate_taus(taus: List[float]) -> List[float]:
+    """Validate a list of unique quantile values."""
+    taus = [float(t) for t in taus]
+    if len(taus) < 2:
+        raise ValueError(f"taus must have at least 2 elements, got {len(taus)}")
+    if len(set(taus)) != len(taus):
+        raise ValueError("taus must be unique")
+    for tau in taus:
+        if not 0 < tau < 1:
+            raise ValueError(f"Each tau must be in (0, 1), got {tau}")
+    return taus
+
+
+def _align_predictions_with_taus(
+    predictions: np.ndarray,
+    taus: List[float],
+) -> Tuple[np.ndarray, List[float]]:
+    """Return predictions reordered to match ascending quantiles."""
+    taus = _validate_taus(taus)
+    predictions = np.asarray(predictions, dtype=float)
+    if predictions.ndim != 2 or predictions.shape[1] != len(taus):
+        raise ValueError(
+            f"predictions must have shape (n_samples, {len(taus)}), "
+            f"got {predictions.shape}"
+        )
+    order = np.argsort(taus)
+    taus_sorted = [taus[i] for i in order]
+    if np.array_equal(order, np.arange(len(taus))):
+        return predictions, taus_sorted
+    return predictions[:, order], taus_sorted
+
+
 def coverage_by_group(
     y_true: np.ndarray,
     lower: np.ndarray,
@@ -167,7 +199,8 @@ def nominal_vs_empirical_coverage(
     predictions : array-like of shape (n_samples, n_quantiles)
         Predicted quantile values. Column j corresponds to taus[j].
     taus : list of float
-        Quantile levels in (0, 1), sorted ascending.
+        Quantile levels in (0, 1). Column j of ``predictions`` corresponds to
+        ``taus[j]``.
 
     Returns
     -------
@@ -177,14 +210,7 @@ def nominal_vs_empirical_coverage(
         ``'coverage_gap'``.
     """
     y_true = np.asarray(y_true, dtype=float).ravel()
-    predictions = np.asarray(predictions, dtype=float)
-    taus = sorted(taus)
-
-    if predictions.ndim != 2 or predictions.shape[1] != len(taus):
-        raise ValueError(
-            f"predictions must have shape (n_samples, {len(taus)}), "
-            f"got {predictions.shape}"
-        )
+    predictions, taus = _align_predictions_with_taus(predictions, taus)
 
     results = []
     n_taus = len(taus)
@@ -295,6 +321,10 @@ def calibration_summary(
         ``'coverage_by_group'``, ``'coverage_by_feature_bin'``.
     """
     y_true, lower, upper = _validate_arrays(y_true, lower, upper)
+    if not 0 < nominal_coverage < 1:
+        raise ValueError(
+            f"nominal_coverage must be in (0, 1), got {nominal_coverage}"
+        )
 
     covered = (y_true >= lower) & (y_true <= upper)
     emp_cov = float(np.mean(covered))

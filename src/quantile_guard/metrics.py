@@ -42,13 +42,46 @@ def _validate_tau(tau: float) -> None:
 
 
 def _validate_taus(taus: List[float]) -> List[float]:
-    """Validate and sort a list of quantile values."""
-    taus = list(taus)
+    """Validate a list of unique quantile values."""
+    taus = [float(t) for t in taus]
     if len(taus) < 2:
         raise ValueError(f"taus must have at least 2 elements, got {len(taus)}")
     for t in taus:
         _validate_tau(t)
-    return sorted(taus)
+    if len(set(taus)) != len(taus):
+        raise ValueError("taus must be unique")
+    return taus
+
+
+def _align_predictions_with_taus(
+    predictions: np.ndarray,
+    taus: List[float],
+) -> tuple:
+    """Return predictions reordered to match ascending quantiles."""
+    taus = _validate_taus(taus)
+    predictions = _validate_predictions_matrix(predictions, taus)
+    order = np.argsort(taus)
+    taus_sorted = [taus[i] for i in order]
+    if np.array_equal(order, np.arange(len(taus))):
+        return predictions, taus_sorted
+    return predictions[:, order], taus_sorted
+
+
+def _pinball_losses_aligned(
+    y_true: np.ndarray,
+    predictions: np.ndarray,
+    taus: List[float],
+) -> Dict[float, float]:
+    """Vectorized pinball loss for already-aligned predictions."""
+    taus_arr = np.asarray(taus)
+    residual = y_true[:, None] - predictions
+    losses = np.where(
+        residual >= 0,
+        taus_arr * residual,
+        (taus_arr - 1) * residual,
+    )
+    mean_losses = np.mean(losses, axis=0)
+    return {tau: float(mean_losses[j]) for j, tau in enumerate(taus)}
 
 
 def pinball_loss(
@@ -103,7 +136,8 @@ def multi_quantile_pinball_loss(
     predictions : array-like of shape (n_samples, n_quantiles)
         Predicted quantile values. Column j corresponds to taus[j].
     taus : list of float
-        Quantile levels in (0, 1), must be sorted ascending.
+        Quantile levels in (0, 1). Column j of ``predictions`` corresponds to
+        ``taus[j]``.
 
     Returns
     -------
@@ -117,14 +151,13 @@ def multi_quantile_pinball_loss(
     ... )
     """
     y_true = _validate_1d(np.asarray(y_true), "y_true")
-    taus = _validate_taus(taus)
-    predictions = _validate_predictions_matrix(np.asarray(predictions), taus)
+    predictions, taus = _align_predictions_with_taus(
+        np.asarray(predictions),
+        taus,
+    )
     if len(y_true) != predictions.shape[0]:
         raise ValueError("y_true and predictions must have same number of rows")
-    return {
-        tau: pinball_loss(y_true, predictions[:, j], tau)
-        for j, tau in enumerate(taus)
-    }
+    return _pinball_losses_aligned(y_true, predictions, taus)
 
 
 def empirical_coverage(
@@ -185,7 +218,8 @@ def crossing_rate(predictions: np.ndarray, taus: List[float]) -> float:
     Parameters
     ----------
     predictions : array-like of shape (n_samples, n_quantiles)
-        Columns must correspond to ``taus`` in ascending order.
+        Column j corresponds to ``taus[j]``; columns are aligned internally
+        before checking crossings.
     taus : list of float
         Quantile levels in (0, 1).
 
@@ -194,8 +228,10 @@ def crossing_rate(predictions: np.ndarray, taus: List[float]) -> float:
     float
         Fraction of samples with at least one crossing, in [0, 1].
     """
-    taus = _validate_taus(taus)
-    predictions = _validate_predictions_matrix(np.asarray(predictions), taus)
+    predictions, taus = _align_predictions_with_taus(
+        np.asarray(predictions),
+        taus,
+    )
     diffs = np.diff(predictions, axis=1)
     has_crossing = np.any(diffs < 0, axis=1)
     return float(np.mean(has_crossing))
@@ -218,8 +254,10 @@ def crossing_magnitude(predictions: np.ndarray, taus: List[float]) -> float:
     float
         Mean total crossing magnitude. Zero if no crossings.
     """
-    taus = _validate_taus(taus)
-    predictions = _validate_predictions_matrix(np.asarray(predictions), taus)
+    predictions, taus = _align_predictions_with_taus(
+        np.asarray(predictions),
+        taus,
+    )
     diffs = np.diff(predictions, axis=1)
     violations = np.clip(diffs, None, 0)  # keep only negative diffs
     return float(np.mean(np.sum(-violations, axis=1)))
@@ -308,12 +346,16 @@ def quantile_evaluation_report(
         ``'interval_score'``.
     """
     y_true = _validate_1d(np.asarray(y_true), "y_true")
-    taus = _validate_taus(taus)
-    predictions = _validate_predictions_matrix(np.asarray(predictions), taus)
+    predictions, taus = _align_predictions_with_taus(
+        np.asarray(predictions),
+        taus,
+    )
 
-    losses = multi_quantile_pinball_loss(y_true, predictions, taus)
-    cr = crossing_rate(predictions, taus)
-    cm = crossing_magnitude(predictions, taus)
+    losses = _pinball_losses_aligned(y_true, predictions, taus)
+    diffs = np.diff(predictions, axis=1)
+    violations = np.clip(diffs, None, 0)
+    cr = float(np.mean(np.any(diffs < 0, axis=1)))
+    cm = float(np.mean(np.sum(-violations, axis=1)))
 
     if lower is None:
         lower = predictions[:, 0]

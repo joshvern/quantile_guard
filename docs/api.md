@@ -12,7 +12,7 @@ from quantile_guard import QuantileRegression
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `tau` | `float` or `list[float]` | `0.5` | Quantile(s) in (0, 1). Lists are sorted automatically. |
+| `tau` | `float` or `list[float]` | `0.5` | Unique quantile(s) in (0, 1). Lists are sorted automatically. |
 | `n_bootstrap` | `int` | `1000` | Bootstrap samples for SE estimation. Only used with `se_method='bootstrap'`. |
 | `random_state` | `int` or `None` | `None` | Random seed for reproducibility. |
 | `regularization` | `str` | `'none'` | `'none'`, `'l1'`, `'elasticnet'`, `'scad'`, or `'mcp'`. |

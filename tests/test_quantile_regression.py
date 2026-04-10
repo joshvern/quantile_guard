@@ -241,6 +241,28 @@ def test_invalid_solver_backend():
         model.fit(X, y)
 
 
+def test_duplicate_taus_rejected():
+    X, y, _ = _make_synthetic_regression()
+    model = QuantileRegression(tau=[0.1, 0.5, 0.5], n_bootstrap=20, random_state=0)
+    with pytest.raises(ValueError, match="unique"):
+        model.fit(X, y)
+
+
+def test_predict_interval_rejects_invalid_coverage():
+    X, y, _ = _make_synthetic_regression()
+    model = QuantileRegression(tau=[0.1, 0.5, 0.9], n_bootstrap=20, random_state=0)
+    model.fit(X, y)
+    with pytest.raises(ValueError, match="coverage must be in"):
+        model.predict_interval(X[:5], coverage=1.0)
+
+
+def test_clusters_length_mismatch_raises():
+    X, y, _ = _make_synthetic_regression()
+    model = QuantileRegression(tau=0.5, n_bootstrap=20, random_state=0)
+    with pytest.raises(ValueError, match="clusters must have the same length"):
+        model.fit(X, y, clusters=np.ones(len(y) - 1))
+
+
 # ---- Empirical bootstrap inference tests ----
 
 def test_pvalues_significant_for_true_signal():
